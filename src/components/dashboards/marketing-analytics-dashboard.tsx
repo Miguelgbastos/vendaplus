@@ -22,6 +22,7 @@ import {
   CHART_COLORS,
   ChartCard,
   EmptyChart,
+  FiltersEmptyState,
   MetricCard,
   SampleNote,
   percentLabel,
@@ -34,7 +35,17 @@ const stageNames: Record<string, string> = {
   oportunidade: "Oportunidade",
 };
 
-export function MarketingAnalyticsDashboard({ data }: { data: MarketingAnalytics }) {
+export function MarketingAnalyticsDashboard({
+  data,
+  empty = false,
+}: {
+  data: MarketingAnalytics;
+  empty?: boolean;
+}) {
+  if (empty) {
+    return <FiltersEmptyState />;
+  }
+
   const funnel = data.funnel.map((item) => ({ ...item, stage: stageNames[item.stage] ?? item.stage }));
   const trend = data.trend.map((item) => ({
     ...item,

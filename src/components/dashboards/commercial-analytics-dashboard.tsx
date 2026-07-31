@@ -4,11 +4,21 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { CircleDollarSign, Clock3, Goal, Trophy } from "lucide-react";
 import type { CommercialAnalytics } from "@/lib/dashboard-analytics";
 import { formatNumber } from "@/lib/utils";
-import { CHART_COLORS, ChartCard, EmptyChart, MetricCard, SampleNote, percentLabel } from "./analytics-ui";
+import { CHART_COLORS, ChartCard, EmptyChart, FiltersEmptyState, MetricCard, SampleNote, percentLabel } from "./analytics-ui";
 
 const stageNames: Record<string, string> = { sql: "SQL", oportunidade: "Oportunidade", negociacao: "Negociação", venda: "Venda" };
 
-export function CommercialAnalyticsDashboard({ data }: { data: CommercialAnalytics }) {
+export function CommercialAnalyticsDashboard({
+  data,
+  empty = false,
+}: {
+  data: CommercialAnalytics;
+  empty?: boolean;
+}) {
+  if (empty) {
+    return <FiltersEmptyState />;
+  }
+
   const funnel = data.funnel.map((item) => ({ ...item, stage: stageNames[item.stage] ?? item.stage }));
   const campaignRows = data.campaigns.filter((row) => row.sql > 0).slice(0, 10);
   return (

@@ -253,6 +253,10 @@ create table public.leads (
 create index leads_tenant_qualification_idx on public.leads (tenant_id, qualification);
 create index leads_tenant_status_idx on public.leads (tenant_id, status_id);
 create index leads_tenant_utm_source_idx on public.leads (tenant_id, utm_source);
+create index leads_tenant_utm_campaign_idx on public.leads (tenant_id, utm_campaign);
+create index leads_tenant_utm_medium_idx on public.leads (tenant_id, utm_medium);
+create index leads_tenant_responsible_idx on public.leads (tenant_id, responsible_user_id);
+create index leads_tenant_first_seen_idx on public.leads (tenant_id, first_seen_at desc);
 create index leads_tenant_updated_idx on public.leads (tenant_id, updated_at desc);
 create index leads_contact_id_idx on public.leads (contact_id);
 

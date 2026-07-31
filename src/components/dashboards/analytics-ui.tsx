@@ -74,6 +74,13 @@ export function EmptyChart({ text = "Ainda não há dados suficientes para este 
   );
 }
 
+export const FILTERS_EMPTY_TEXT =
+  "Nenhum lead no período/filtros selecionados.";
+
+export function FiltersEmptyState() {
+  return <EmptyChart text={FILTERS_EMPTY_TEXT} />;
+}
+
 export function SampleNote() {
   return (
     <div className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">

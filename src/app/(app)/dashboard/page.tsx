@@ -1,9 +1,18 @@
 import { redirect } from "next/navigation";
+import { DashboardFiltersBar } from "@/components/dashboards/dashboard-filters";
 import { MetricsGrid } from "@/components/dashboards/metrics-grid";
 import { getActiveTenant, requireUser } from "@/lib/auth";
+import { loadDashboardFilterOptions } from "@/lib/dashboard-filter-options";
+import { parseDashboardFilters } from "@/lib/dashboard-filters";
 import { loadDashboardMetrics } from "@/lib/metrics";
 
-export default async function DashboardPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const { userId } = await requireUser();
   if (!userId) redirect("/login");
 
@@ -21,7 +30,12 @@ export default async function DashboardPage() {
     );
   }
 
-  const metrics = await loadDashboardMetrics(membership.tenant.id);
+  const params = await searchParams;
+  const { filters, clamped } = parseDashboardFilters(params);
+  const [metrics, options] = await Promise.all([
+    loadDashboardMetrics(membership.tenant.id, filters),
+    loadDashboardFilterOptions(membership.tenant.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -33,7 +47,12 @@ export default async function DashboardPage() {
           Visão consolidada do funil para {membership.tenant.name}.
         </p>
       </div>
-      <MetricsGrid metrics={metrics} />
+      <DashboardFiltersBar
+        filters={filters}
+        options={options}
+        clamped={clamped}
+      />
+      <MetricsGrid metrics={metrics} empty={metrics.leadsTotal === 0} />
     </div>
   );
 }
