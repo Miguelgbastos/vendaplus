@@ -12,12 +12,15 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
 import { requireUser } from "@/lib/auth";
+import { normalizeKommoSubdomain } from "@/lib/kommo/subdomain";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+  const referer = searchParams.get("referer");
   const appUrl = getAppUrl();
+  let callbackTenantId: string | null = null;
 
   if (!code || !state) {
     return NextResponse.redirect(`${appUrl}/kommo?error=oauth_missing`);
@@ -30,6 +33,7 @@ export async function GET(request: Request) {
     }
 
     const payload = verifyOAuthState(state);
+    callbackTenantId = payload.tenantId;
     if (payload.userId !== sessionUserId) {
       return NextResponse.redirect(`${appUrl}/kommo?error=oauth_user_mismatch`);
     }
@@ -55,9 +59,29 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${appUrl}/kommo?error=oauth_failed`);
     }
 
+    const normalizedReferer = normalizeKommoSubdomain(referer);
+    if (
+      !normalizedReferer.ok ||
+      !normalizedReferer.subdomain ||
+      normalizedReferer.subdomain !== credentials.subdomain
+    ) {
+      await admin
+        .from("kommo_connections")
+        .update({
+          status: "error",
+          last_error: "kommo_oauth_account_mismatch",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tenant_id", payload.tenantId)
+        .eq("id", credentials.connectionId);
+      return NextResponse.redirect(
+        `${appUrl}/kommo?error=oauth_account_mismatch`,
+      );
+    }
+
     const tokens = await exchangeKommoCode({
       code,
-      subdomain: credentials.subdomain,
+      subdomain: normalizedReferer.subdomain,
       integrationId: credentials.integrationId,
       clientSecret: credentials.clientSecret,
     });
@@ -71,7 +95,7 @@ export async function GET(request: Request) {
     let accountId: string | null = null;
     try {
       const accountRes = await fetch(
-        `https://${credentials.subdomain}.kommo.com/api/v4/account`,
+        `https://${normalizedReferer.subdomain}.kommo.com/api/v4/account`,
         { headers: { Authorization: `Bearer ${tokens.access_token}` } },
       );
       if (accountRes.ok) {
@@ -118,10 +142,27 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(`${appUrl}/kommo?connected=1`);
   } catch (error) {
+    const safeError =
+      error instanceof Error && error.message.startsWith("kommo_oauth_exchange_")
+        ? error.message
+        : "kommo_oauth_callback_failed";
+    if (callbackTenantId) {
+      const admin = createAdminClient();
+      await admin
+        .from("kommo_connections")
+        .update({
+          status: "error",
+          last_error: safeError,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tenant_id", callbackTenantId);
+    }
     console.error(
       "kommo oauth callback",
-      error instanceof Error ? error.message : "error",
+      safeError,
     );
-    return NextResponse.redirect(`${appUrl}/kommo?error=oauth_failed`);
+    return NextResponse.redirect(
+      `${appUrl}/kommo?error=${safeError.startsWith("kommo_oauth_exchange_") ? "oauth_exchange_failed" : "oauth_failed"}`,
+    );
   }
 }

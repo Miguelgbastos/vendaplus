@@ -17,6 +17,10 @@ const KOMMO_ERROR_MESSAGES: Record<string, string> = {
     "Subdomínio inválido. Use apenas o nome da conta (ex.: minhaempresa) ou minhaempresa.kommo.com.",
   oauth_missing: "Não foi possível iniciar a conexão. Tente novamente.",
   oauth_failed: "Falha na conexão OAuth com o Kommo. Tente novamente.",
+  oauth_exchange_failed:
+    "O Kommo autorizou o acesso, mas recusou a troca do código por tokens. Confira a Secret Key e a URL de redirecionamento da integração.",
+  oauth_account_mismatch:
+    "A conta autorizada no Kommo não corresponde ao subdomínio configurado para esta organização.",
   oauth_state_used:
     "Este link de autorização já foi usado ou expirou. Inicie a conexão novamente.",
   oauth_user_mismatch:

@@ -82,8 +82,34 @@ export function buildKommoAuthorizeUrl(params: {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", params.state);
-  url.searchParams.set("mode", "post_message");
   return url.toString();
+}
+
+function kommoOAuthError(status: number, body: string) {
+  let detail = "unknown_error";
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: string;
+      error_description?: string;
+      detail?: string;
+      title?: string;
+    };
+    detail =
+      parsed.error_description ||
+      parsed.error ||
+      parsed.detail ||
+      parsed.title ||
+      detail;
+  } catch {
+    // A resposta pode não ser JSON. Não incluímos o corpo bruto para evitar
+    // persistir códigos ou outros dados sensíveis retornados pelo provedor.
+  }
+
+  const safeDetail = detail
+    .replace(/[^a-zA-Z0-9 _.-]/g, "")
+    .trim()
+    .slice(0, 160);
+  return new Error(`kommo_oauth_exchange_${status}:${safeDetail}`);
 }
 
 export async function exchangeKommoCode(params: {
@@ -109,8 +135,8 @@ export async function exchangeKommoCode(params: {
     },
   );
   if (!res.ok) {
-    await res.text().catch(() => "");
-    throw new Error(`Falha no exchange OAuth Kommo: ${res.status}`);
+    const body = await res.text().catch(() => "");
+    throw kommoOAuthError(res.status, body);
   }
   return (await res.json()) as KommoTokenResponse;
 }

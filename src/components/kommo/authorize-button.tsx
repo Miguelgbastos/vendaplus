@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -11,11 +10,11 @@ export function KommoAuthorizeButton({
   tenantId: string;
   enabled: boolean;
 }) {
-  const router = useRouter();
-
   function authorize() {
     if (!enabled) return;
-    router.push(`/api/kommo/oauth/start?tenant_id=${encodeURIComponent(tenantId)}`);
+    window.location.assign(
+      `/api/kommo/oauth/start?tenant_id=${encodeURIComponent(tenantId)}`,
+    );
   }
 
   return (
