@@ -145,7 +145,10 @@ export async function POST(
       console.error("raw_events insert", insertError.message);
     }
 
-    if (rawEventId) {
+    // Contact-only and other Kommo events may not reference a lead. Keep the
+    // raw event for auditability, but only enqueue work the lead synchronizer
+    // can process.
+    if (rawEventId && leadIds.length > 0) {
       const { error: jobError } = await admin.from("jobs").insert({
         tenant_id: endpoint.tenant_id,
         raw_event_id: rawEventId,
