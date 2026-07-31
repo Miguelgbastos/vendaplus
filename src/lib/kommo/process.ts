@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchKommoLead } from "@/lib/kommo/client";
-import { normalizeKommoLead } from "@/lib/kommo/normalize";
+import {
+  completeQualificationMilestones,
+  milestonesForQualification,
+  normalizeKommoLead,
+} from "@/lib/kommo/normalize";
 import type { FieldMapping, QualificationStage } from "@/types/database";
 
 type JobRow = {
@@ -139,17 +143,26 @@ async function upsertNormalizedLead(
     pipeline_id: string | null;
     status_id: string | null;
     status_name: string | null;
+    custom_fields: Record<string, unknown>;
   } | null = null;
 
   if (normalized.kommoLeadId) {
     const { data } = await admin
       .from("leads")
-      .select("id, qualification, pipeline_id, status_id, status_name")
+      .select("id, qualification, pipeline_id, status_id, status_name, custom_fields")
       .eq("tenant_id", tenantId)
       .eq("kommo_lead_id", normalized.kommoLeadId)
       .maybeSingle();
     previous = data;
   }
+
+  const completedCustomFields = completeQualificationMilestones(
+    {
+      ...(previous?.custom_fields ?? {}),
+      ...normalized.customFields,
+    },
+    normalized.qualification,
+  );
 
   const leadPayload = {
     tenant_id: tenantId,
@@ -167,7 +180,7 @@ async function upsertNormalizedLead(
     utm_campaign: normalized.utm_campaign,
     utm_content: normalized.utm_content,
     utm_term: normalized.utm_term,
-    custom_fields: normalized.customFields,
+    custom_fields: completedCustomFields,
     raw: rawLead,
     last_seen_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -191,28 +204,39 @@ async function upsertNormalizedLead(
     throw new Error(error?.message || "Falha ao upsert lead.");
   }
 
+  const previousQualification = previous?.qualification ?? null;
   if (
-    previous &&
     normalized.qualification &&
-    previous.qualification !== normalized.qualification
+    previousQualification !== normalized.qualification
   ) {
-    await admin.from("qualification_history").insert({
-      tenant_id: tenantId,
-      lead_id: lead.id,
-      from_qualification: previous.qualification,
-      to_qualification: normalized.qualification,
-      source: "kommo",
-      metadata: {},
-    });
-  } else if (!previous && normalized.qualification) {
-    await admin.from("qualification_history").insert({
-      tenant_id: tenantId,
-      lead_id: lead.id,
-      from_qualification: null,
-      to_qualification: normalized.qualification,
-      source: "kommo",
-      metadata: { initial: true },
-    });
+    const positiveStages = milestonesForQualification(normalized.qualification);
+    const previousIndex = previousQualification
+      ? positiveStages.indexOf(previousQualification)
+      : -1;
+    const transitions =
+      normalized.qualification === "perda"
+        ? ["perda" as const]
+        : !previousQualification
+          ? positiveStages
+          : previousIndex >= 0
+            ? positiveStages.slice(previousIndex + 1)
+            : [normalized.qualification];
+
+    let fromQualification = previousQualification;
+    for (const toQualification of transitions) {
+      await admin.from("qualification_history").insert({
+        tenant_id: tenantId,
+        lead_id: lead.id,
+        from_qualification: fromQualification,
+        to_qualification: toQualification,
+        source: "kommo",
+        metadata: {
+          inferred: toQualification !== normalized.qualification,
+          initial: !previous,
+        },
+      });
+      fromQualification = toQualification;
+    }
   }
 
   if (

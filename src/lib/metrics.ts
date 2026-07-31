@@ -1,4 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  isActiveMilestone,
+  milestonesForQualification,
+} from "@/lib/kommo/normalize";
 import type { DashboardMetrics, QualificationStage } from "@/types/database";
 
 const STAGES: QualificationStage[] = [
@@ -17,7 +21,7 @@ export async function loadDashboardMetrics(
   const supabase = await createClient();
   const { data: leads } = await supabase
     .from("leads")
-    .select("qualification, price")
+    .select("qualification, price, custom_fields")
     .eq("tenant_id", tenantId);
 
   const rows = leads ?? [];
@@ -29,7 +33,22 @@ export async function loadDashboardMetrics(
 
   for (const lead of rows) {
     const q = lead.qualification as QualificationStage | null;
-    if (q && counts[q] != null) counts[q] += 1;
+    const customFields =
+      lead.custom_fields && typeof lead.custom_fields === "object"
+        ? (lead.custom_fields as Record<string, unknown>)
+        : {};
+    const reached = new Set(milestonesForQualification(q));
+
+    for (const stage of STAGES) {
+      if (
+        isActiveMilestone(customFields[stage]) ||
+        isActiveMilestone(customFields[stage.toUpperCase()])
+      ) {
+        reached.add(stage);
+      }
+    }
+    for (const stage of reached) counts[stage] += 1;
+
     if (q === "venda" && lead.price != null) {
       receitaFechada += Number(lead.price) || 0;
     }

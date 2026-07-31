@@ -18,7 +18,7 @@ const UTM_KEYS = [
   "utm_term",
 ] as const;
 
-const QUALIFICATION_MILESTONES: QualificationStage[] = [
+export const QUALIFICATION_MILESTONES: QualificationStage[] = [
   "mql",
   "sal",
   "sql",
@@ -97,10 +97,36 @@ export function mapQualification(value: unknown): QualificationStage | null {
   return null;
 }
 
-function isActiveMilestone(value: unknown): boolean {
+export function isActiveMilestone(value: unknown): boolean {
   if (value === true || value === 1) return true;
   const normalized = normalizeKey(String(value ?? ""));
   return ["1", "true", "sim", "yes", "ativo", "active"].includes(normalized);
+}
+
+export function milestonesForQualification(
+  qualification: QualificationStage | null,
+): QualificationStage[] {
+  if (!qualification) return [];
+  if (qualification === "perda") return ["perda"];
+  const positiveStages = QUALIFICATION_MILESTONES.filter(
+    (stage) => stage !== "perda",
+  );
+  const index = positiveStages.indexOf(qualification);
+  return index >= 0 ? positiveStages.slice(0, index + 1) : [];
+}
+
+export function completeQualificationMilestones(
+  customFields: Record<string, unknown>,
+  qualification: QualificationStage | null,
+): Record<string, unknown> {
+  const completed = { ...customFields };
+  for (const stage of milestonesForQualification(qualification)) {
+    if (stage === "perda") continue;
+    const label = stage === "negociacao" ? "Negociação" : stage.toUpperCase();
+    completed[stage] = "1";
+    completed[label] = "1";
+  }
+  return completed;
 }
 
 export function inferQualificationFromMilestones(
