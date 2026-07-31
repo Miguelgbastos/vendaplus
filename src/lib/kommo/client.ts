@@ -101,8 +101,15 @@ function kommoOAuthError(status: number, body: string) {
       parsed.title ||
       detail;
   } catch {
-    // A resposta pode não ser JSON. Não incluímos o corpo bruto para evitar
-    // persistir códigos ou outros dados sensíveis retornados pelo provedor.
+    // Respostas de proxy/WAF costumam ser HTML ou texto. Removemos marcação e
+    // aceitamos apenas uma mensagem curta e sanitizada, nunca o corpo bruto.
+    const plainText = body
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (plainText) detail = plainText;
   }
 
   const safeDetail = detail
@@ -124,7 +131,11 @@ export async function exchangeKommoCode(params: {
     `https://${params.subdomain}.kommo.com/oauth2/access_token`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "VendaPlus-Kommo-OAuth/1.0",
+      },
       body: JSON.stringify({
         client_id: params.integrationId,
         client_secret: params.clientSecret,
@@ -153,7 +164,11 @@ export async function refreshKommoToken(params: {
     `https://${params.subdomain}.kommo.com/oauth2/access_token`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "VendaPlus-Kommo-OAuth/1.0",
+      },
       body: JSON.stringify({
         client_id: params.integrationId,
         client_secret: params.clientSecret,
