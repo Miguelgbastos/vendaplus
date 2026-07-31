@@ -10,6 +10,7 @@ const bodySchema = z.object({
   subdomain: z.string().min(1),
   integration_id: z.string().min(1).max(200),
   client_secret: z.string().max(500).optional(),
+  long_lived_token: z.string().max(5000).optional(),
 });
 
 export async function POST(request: Request) {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
     const { tenant_id: tenantId, integration_id: integrationId } = parsed.data;
     const clientSecretInput = parsed.data.client_secret?.trim() || "";
+    const longLivedToken = parsed.data.long_lived_token?.trim() || "";
 
     const membership = await getActiveTenant(userId, tenantId);
     if (!membership || membership.tenant.id !== tenantId) {
@@ -83,13 +85,50 @@ export async function POST(request: Request) {
       );
     }
 
+    let longLivedTokenEncrypted: string | null | undefined;
+    let accountId: string | null | undefined;
+    if (longLivedToken) {
+      const accountResponse = await fetch(
+        `https://${subdomainResult.subdomain}.kommo.com/api/v4/account`,
+        {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${longLivedToken}`,
+            "User-Agent": "VendaPlus-Kommo/1.0",
+          },
+        },
+      );
+      if (!accountResponse.ok) {
+        return NextResponse.json(
+          { error: "Token de longa duração inválido para esta conta Kommo." },
+          { status: 400 },
+        );
+      }
+      const account = (await accountResponse.json()) as { id?: number };
+      accountId = account.id != null ? String(account.id) : null;
+      longLivedTokenEncrypted = await encryptSecret(longLivedToken);
+    }
+
+    const now = new Date().toISOString();
     const payload = {
       tenant_id: tenantId,
       subdomain: subdomainResult.subdomain,
       integration_id: integrationIdClean,
       client_secret_encrypted: secretEncrypted,
-      status: existing?.status === "connected" ? "connected" : "pending",
-      updated_at: new Date().toISOString(),
+      ...(longLivedTokenEncrypted
+        ? {
+            access_token_encrypted: longLivedTokenEncrypted,
+            refresh_token_encrypted: null,
+            token_expires_at: null,
+            account_id: accountId,
+            status: "connected",
+            last_error: null,
+            connected_at: now,
+          }
+        : {
+            status: existing?.status === "connected" ? "connected" : "pending",
+          }),
+      updated_at: now,
     };
 
     const { error: upsertError } = await admin
@@ -106,6 +145,7 @@ export async function POST(request: Request) {
       subdomain: subdomainResult.subdomain,
       secret_configured: true,
       integration_configured: true,
+      connected: Boolean(longLivedTokenEncrypted),
     });
   } catch (error) {
     console.error(
