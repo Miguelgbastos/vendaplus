@@ -213,8 +213,16 @@ export async function getValidAccessToken(tenantId: string): Promise<{
   if (!connection.integration_id || !connection.client_secret_encrypted) {
     throw new Error("Credenciais da integração Kommo ausentes.");
   }
-  if (!connection.access_token_encrypted || !connection.refresh_token_encrypted) {
-    throw new Error("Tokens Kommo ausentes.");
+  if (!connection.access_token_encrypted) {
+    throw new Error("Token Kommo ausente.");
+  }
+
+  if (!connection.refresh_token_encrypted) {
+    return {
+      accessToken: await decryptSecret(connection.access_token_encrypted),
+      subdomain: connection.subdomain,
+      connectionId: connection.id,
+    };
   }
 
   const expiresAt = connection.token_expires_at

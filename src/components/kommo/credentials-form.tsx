@@ -24,6 +24,7 @@ export function KommoCredentialsForm({
   const [subdomain, setSubdomain] = useState(initialSubdomain);
   const [integrationId, setIntegrationId] = useState(initialIntegrationId);
   const [clientSecret, setClientSecret] = useState("");
+  const [longLivedToken, setLongLivedToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ export function KommoCredentialsForm({
         subdomain,
         integration_id: integrationId,
         client_secret: clientSecret || undefined,
+        long_lived_token: longLivedToken || undefined,
       }),
     });
 
@@ -54,7 +56,12 @@ export function KommoCredentialsForm({
     }
 
     setClientSecret("");
-    setSuccess("Configuração salva. Você já pode autorizar no Kommo.");
+    setLongLivedToken("");
+    setSuccess(
+      longLivedToken
+        ? "Token validado e conexão Kommo concluída."
+        : "Configuração salva. Você já pode autorizar no Kommo.",
+    );
     router.refresh();
   }
 
@@ -70,6 +77,20 @@ export function KommoCredentialsForm({
           onChange={(e) => setSubdomain(e.target.value)}
           autoComplete="off"
         />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="long_lived_token">Token de longa duração (alternativa ao OAuth)</Label>
+        <Input
+          id="long_lived_token"
+          type="password"
+          placeholder="Cole o token gerado no Kommo"
+          value={longLivedToken}
+          onChange={(e) => setLongLivedToken(e.target.value)}
+          autoComplete="new-password"
+        />
+        <p className="text-xs text-muted-foreground">
+          Use quando a hospedagem bloquear a troca OAuth. O token é validado e armazenado criptografado.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="integration_id">Integration ID</Label>
