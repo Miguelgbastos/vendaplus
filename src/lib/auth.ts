@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActiveTenantIdFromCookie } from "@/lib/tenant-cookie";
+import { resolveActiveMembership } from "@/lib/resolve-active-membership";
 import type { Tenant, TenantRole, TenantUser } from "@/types/database";
 
 export async function requireUser() {
@@ -34,6 +36,11 @@ export async function getUserMemberships(userId: string) {
   return (data ?? []) as unknown as Membership[];
 }
 
+/**
+ * Resolve o tenant ativo.
+ * - Sem preferredTenantId: lê cookie httpOnly e faz fallback seguro.
+ * - Com preferredTenantId (APIs): exige membership + tenant ativo; sem fallback.
+ */
 export async function getActiveTenant(
   userId: string,
   preferredTenantId?: string | null,
@@ -41,11 +48,14 @@ export async function getActiveTenant(
   const memberships = await getUserMemberships(userId);
   if (!memberships.length) return null;
 
-  const match =
-    (preferredTenantId &&
-      memberships.find((m) => m.tenant_id === preferredTenantId && m.tenants)) ||
-    memberships.find((m) => m.tenants?.is_active) ||
-    memberships[0];
+  const fromArg = preferredTenantId !== undefined;
+  const preferred = fromArg
+    ? preferredTenantId
+    : await getActiveTenantIdFromCookie();
+
+  const match = resolveActiveMembership(memberships, preferred, {
+    allowFallback: !fromArg,
+  });
 
   if (!match?.tenants) return null;
   return { tenant: match.tenants, role: match.role };
