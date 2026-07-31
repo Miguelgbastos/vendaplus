@@ -13,6 +13,50 @@ const bodySchema = z.object({
   long_lived_token: z.string().max(5000).optional(),
 });
 
+type KommoLongLivedTokenClaims = {
+  aud?: string;
+  account_id?: number | string;
+  api_domain?: string;
+  exp?: number;
+  nbf?: number;
+  scopes?: unknown;
+};
+
+function readLongLivedTokenClaims(token: string): KommoLongLivedTokenClaims | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    return JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf8"),
+    ) as KommoLongLivedTokenClaims;
+  } catch {
+    return null;
+  }
+}
+
+function validateLongLivedTokenClaims(
+  token: string,
+  integrationId: string,
+): KommoLongLivedTokenClaims | null {
+  const claims = readLongLivedTokenClaims(token);
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    !claims ||
+    claims.aud !== integrationId ||
+    claims.account_id == null ||
+    typeof claims.api_domain !== "string" ||
+    !/^api(?:-[a-z0-9]+)?\.kommo\.com$/.test(claims.api_domain) ||
+    typeof claims.exp !== "number" ||
+    claims.exp <= now ||
+    (typeof claims.nbf === "number" && claims.nbf > now + 60) ||
+    !Array.isArray(claims.scopes) ||
+    !claims.scopes.includes("crm")
+  ) {
+    return null;
+  }
+  return claims;
+}
+
 export async function POST(request: Request) {
   try {
     const { userId } = await requireUser();
@@ -88,8 +132,19 @@ export async function POST(request: Request) {
     let longLivedTokenEncrypted: string | null | undefined;
     let accountId: string | null | undefined;
     if (longLivedToken) {
+      const tokenClaims = validateLongLivedTokenClaims(
+        longLivedToken,
+        integrationIdClean,
+      );
+      if (!tokenClaims) {
+        return NextResponse.json(
+          { error: "Token de longa duração inválido para esta integração Kommo." },
+          { status: 400 },
+        );
+      }
+
       const accountResponse = await fetch(
-        `https://${subdomainResult.subdomain}.kommo.com/api/v4/account`,
+        `https://${tokenClaims.api_domain}/api/v4/account`,
         {
           headers: {
             Accept: "application/json",
@@ -106,6 +161,12 @@ export async function POST(request: Request) {
       }
       const account = (await accountResponse.json()) as { id?: number };
       accountId = account.id != null ? String(account.id) : null;
+      if (accountId !== String(tokenClaims.account_id)) {
+        return NextResponse.json(
+          { error: "Token de longa duração pertence a outra conta Kommo." },
+          { status: 400 },
+        );
+      }
       longLivedTokenEncrypted = await encryptSecret(longLivedToken);
     }
 
