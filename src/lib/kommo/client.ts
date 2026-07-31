@@ -134,7 +134,6 @@ export async function exchangeKommoCode(params: {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "VendaPlus-Kommo-OAuth/1.0",
       },
       body: JSON.stringify({
         client_id: params.integrationId,
@@ -167,7 +166,6 @@ export async function refreshKommoToken(params: {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "VendaPlus-Kommo-OAuth/1.0",
       },
       body: JSON.stringify({
         client_id: params.integrationId,
