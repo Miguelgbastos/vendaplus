@@ -17,6 +17,10 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  TenantSwitcher,
+  type TenantOption,
+} from "@/components/layout/tenant-switcher";
 
 const NAV = [
   { href: "/dashboard", label: "Geral", icon: LayoutDashboard },
@@ -65,15 +69,20 @@ function NavLinks({
 export function AppShell({
   children,
   tenantName,
+  activeTenantId,
+  tenants,
   userEmail,
 }: {
   children: React.ReactNode;
   tenantName?: string | null;
+  activeTenantId?: string | null;
+  tenants?: TenantOption[];
   userEmail?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const options = tenants ?? [];
 
   async function signOut() {
     const supabase = createClient();
@@ -86,13 +95,19 @@ export function AppShell({
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1440px]">
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
-          <div className="mb-8 px-2">
+          <div className="mb-6 px-2">
             <p className="font-display text-2xl font-semibold tracking-tight text-foreground">
               Venda<span className="text-primary">+</span>
             </p>
             <p className="mt-1 truncate text-xs text-muted-foreground">
               {tenantName || "Sem organização"}
             </p>
+          </div>
+          <div className="mb-6 px-0">
+            <TenantSwitcher
+              tenants={options}
+              activeTenantId={activeTenantId}
+            />
           </div>
           <NavLinks pathname={pathname} />
           <div className="mt-auto space-y-3 border-t border-sidebar-border pt-4">
@@ -109,10 +124,15 @@ export function AppShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-            <p className="font-display text-lg font-semibold">
-              Venda<span className="text-primary">+</span>
-            </p>
+          <header className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 md:hidden">
+            <div className="min-w-0">
+              <p className="font-display text-lg font-semibold">
+                Venda<span className="text-primary">+</span>
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {tenantName || "Sem organização"}
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -123,11 +143,15 @@ export function AppShell({
             </Button>
           </header>
           {open ? (
-            <div className="border-b border-border bg-card px-4 py-4 md:hidden">
+            <div className="space-y-4 border-b border-border bg-card px-4 py-4 md:hidden">
+              <TenantSwitcher
+                tenants={options}
+                activeTenantId={activeTenantId}
+              />
               <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
               <Button
                 variant="ghost"
-                className="mt-3 w-full justify-start"
+                className="w-full justify-start"
                 onClick={signOut}
               >
                 <LogOut className="h-4 w-4" />

@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { getActiveTenant, requireUser } from "@/lib/auth";
+import {
+  getActiveTenant,
+  getUserMemberships,
+  requireUser,
+} from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +24,25 @@ export default async function AppLayout({
     .eq("id", userId)
     .maybeSingle();
 
-  const membership = await getActiveTenant(userId);
+  const [membership, memberships] = await Promise.all([
+    getActiveTenant(userId),
+    getUserMemberships(userId),
+  ]);
+
+  const tenants = memberships
+    .filter((m) => m.tenants?.is_active)
+    .map((m) => ({
+      id: m.tenants!.id,
+      name: m.tenants!.name,
+      slug: m.tenants!.slug,
+      role: m.role,
+    }));
 
   return (
     <AppShell
       tenantName={membership?.tenant.name}
+      activeTenantId={membership?.tenant.id}
+      tenants={tenants}
       userEmail={profile?.email || profile?.full_name}
     >
       {children}

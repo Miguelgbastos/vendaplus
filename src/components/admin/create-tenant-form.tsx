@@ -46,15 +46,37 @@ export function CreateTenantForm() {
     }
 
     const slug = slugify(name) || `org-${String(userId).slice(0, 8)}`;
-    const { error: rpcError } = await supabase.rpc("create_tenant_with_owner", {
-      p_name: name.trim(),
-      p_slug: slug,
+    const { data: tenantId, error: rpcError } = await supabase.rpc(
+      "create_tenant_with_owner",
+      {
+        p_name: name.trim(),
+        p_slug: slug,
+      },
+    );
+
+    if (rpcError || !tenantId) {
+      setLoading(false);
+      setError(mapCreateTenantError(rpcError?.message));
+      return;
+    }
+
+    const activate = await fetch("/api/tenant/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_id: tenantId }),
     });
 
     setLoading(false);
 
-    if (rpcError) {
-      setError(mapCreateTenantError(rpcError.message));
+    if (!activate.ok) {
+      const data = (await activate.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      setError(
+        data.error ||
+          "Organização criada, mas não foi possível ativá-la. Selecione-a no menu.",
+      );
+      router.refresh();
       return;
     }
 
