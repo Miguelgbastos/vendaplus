@@ -280,23 +280,9 @@ export async function kommoFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const { accessToken, subdomain } = await getValidAccessToken(tenantId);
-  let apiHost = `${subdomain}.kommo.com`;
-  try {
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split(".")[1], "base64url").toString("utf8"),
-    ) as { api_domain?: string };
-    if (
-      typeof payload.api_domain === "string" &&
-      /^api(?:-[a-z0-9]+)?\.kommo\.com$/.test(payload.api_domain)
-    ) {
-      apiHost = payload.api_domain;
-    }
-  } catch {
-    // Tokens OAuth comuns não precisam carregar o domínio da API no payload.
-  }
   const url = path.startsWith("http")
     ? path
-    : `https://${apiHost}${path.startsWith("/") ? path : `/${path}`}`;
+    : `https://${subdomain}.kommo.com${path.startsWith("/") ? path : `/${path}`}`;
 
   const res = await fetch(url, {
     ...init,
