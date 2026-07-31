@@ -18,6 +18,16 @@ const UTM_KEYS = [
   "utm_term",
 ] as const;
 
+const QUALIFICATION_MILESTONES: QualificationStage[] = [
+  "mql",
+  "sal",
+  "sql",
+  "oportunidade",
+  "negociacao",
+  "venda",
+  "perda",
+];
+
 export type NormalizedLead = {
   kommoLeadId: string | null;
   name: string | null;
@@ -82,6 +92,29 @@ export function mapQualification(value: unknown): QualificationStage | null {
     }
     if (aliases.some((alias) => normalized.includes(normalizeKey(alias).replace(/_/g, " ")))) {
       return stage;
+    }
+  }
+  return null;
+}
+
+function isActiveMilestone(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  const normalized = normalizeKey(String(value ?? ""));
+  return ["1", "true", "sim", "yes", "ativo", "active"].includes(normalized);
+}
+
+export function inferQualificationFromMilestones(
+  bag: Record<string, unknown>,
+): QualificationStage | null {
+  // Kommo milestone fields are cumulative. The most advanced active field is
+  // the lead's current normalized qualification.
+  for (const stage of [...QUALIFICATION_MILESTONES].reverse()) {
+    const aliases = [stage, ...QUALIFICATION_ALIASES[stage]];
+    for (const alias of aliases) {
+      const key = normalizeKey(alias);
+      if (isActiveMilestone(bag[key]) || isActiveMilestone(bag[alias])) {
+        return stage;
+      }
     }
   }
   return null;
@@ -194,6 +227,7 @@ export function normalizeKommoLead(
   const qualification =
     mapQualification(mapped.qualification) ||
     mapQualification(bag.qualification) ||
+    inferQualificationFromMilestones(bag) ||
     mapQualification(bag.etapa) ||
     mapQualification(bag.stage) ||
     mapQualification(bag.status_name) ||
