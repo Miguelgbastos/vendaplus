@@ -94,7 +94,6 @@ export async function POST(request: Request) {
           headers: {
             Accept: "application/json",
             Authorization: `Bearer ${longLivedToken}`,
-            "User-Agent": "VendaPlus-Kommo/1.0",
           },
         },
       );
