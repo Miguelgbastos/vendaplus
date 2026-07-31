@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Venda+
 
-## Getting Started
+MVP de analytics de marketing e comercial com autenticação Supabase, multi-tenant e integração Kommo **sem n8n**.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js 16 (App Router) + React 19
+- Supabase Auth (SSR) com `src/proxy.ts` e `auth.getClaims()`
+- Postgres (schema em `supabase/migrations/`) + RLS
+- shadcn-style UI (Radix + Tailwind) dark, pt-BR
+- Fila interna (`jobs` + `claim_jobs` com `FOR UPDATE SKIP LOCKED`)
+
+## Arquitetura
+
+```
+Kommo (integração privada por tenant)
+  → UI /kommo salva subdomain + Integration ID + Secret Key (AES-GCM)
+  → OAuth start/callback usam credenciais DAQUELE tenant
+  → webhook /api/webhooks/kommo/[token]
+  → raw_events + jobs
+  → worker processa com refresh OAuth do mesmo tenant
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Módulos principais
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Área | Caminho |
+|------|---------|
+| Proxy Auth | `src/proxy.ts` |
+| Clientes Supabase | `src/lib/supabase/*` |
+| AES-GCM + state OAuth | `src/lib/crypto.ts` |
+| Cliente Kommo (por tenant) | `src/lib/kommo/client.ts` |
+| Credenciais API | `src/app/api/kommo/credentials/route.ts` |
+| Migrations | `supabase/migrations/` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup
 
-## Learn More
+1. Copie o ambiente:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp .env.example .env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Preencha as chaves (não versionadas):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `WORKER_SECRET`
+- `TOKEN_ENCRYPTION_KEY` — 64 hex (32 bytes), ex.: `openssl rand -hex 32`
+- `OAUTH_STATE_SECRET`
+- `NEXT_PUBLIC_APP_URL` — a Redirect URI do Kommo será `{APP_URL}/api/kommo/oauth/callback`
 
-## Deploy on Vercel
+3. Aplique as migrations no Supabase (você aplica o remoto). Localmente:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+# 0001_initial.sql + 20260731034402_kommo_private_credentials_per_tenant.sql
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. Instale e rode:
+
+```bash
+npm install
+npm run dev
+```
+
+5. Em **Kommo**, configure a integração privada por tenant (Integration ID + Secret Key) e autorize.
+
+6. Processe a fila periodicamente:
+
+```bash
+curl -X POST "$NEXT_PUBLIC_APP_URL/api/workers/process" \
+  -H "Authorization: Bearer $WORKER_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"limit":10}'
+```
+
+## Fluxos de produto
+
+- **Auth:** `/login`, `/cadastro`
+- **Shell:** dashboards, Admin, assistente Kommo
+- **Kommo:** credenciais por tenant → OAuth → webhook
+- **Sem** `KOMMO_CLIENT_ID` / `KOMMO_CLIENT_SECRET` globais
+
+## Segurança
+
+- RLS em todas as tabelas `public`
+- `integration_id`, `client_secret_encrypted`, access/refresh tokens: **sem SELECT** para `authenticated`
+- Secret Key criptografada (AES-GCM); nunca retornada ao client
+- OAuth state one-time; isolamento estrito por `tenant_id` no load de credenciais
+- Worker protegido por `WORKER_SECRET`
+
+## Scripts
+
+```bash
+npm run lint
+npm run build
+npm run dev
+```
