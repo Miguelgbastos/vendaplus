@@ -19,6 +19,8 @@ const KOMMO_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed: "Falha na conexão OAuth com o Kommo. Tente novamente.",
   oauth_exchange_failed:
     "O Kommo autorizou o acesso, mas recusou a troca do código por tokens. Confira a Secret Key e a URL de redirecionamento da integração.",
+  oauth_rate_limited:
+    "Muitas tentativas recentes foram bloqueadas pelo Kommo (403/429). Aguarde cerca de 5 minutos e autorize uma única vez.",
   oauth_account_mismatch:
     "A conta autorizada no Kommo não corresponde ao subdomínio configurado para esta organização.",
   oauth_state_used:
@@ -27,6 +29,29 @@ const KOMMO_ERROR_MESSAGES: Record<string, string> = {
     "A sessão atual não corresponde ao usuário que iniciou a conexão. Entre com a conta correta e tente de novo.",
   connected: "Kommo conectado com sucesso.",
 };
+
+function friendlyLastError(lastError: string | null | undefined): string | null {
+  if (!lastError) return null;
+  if (lastError.startsWith("kommo_oauth_exchange_403")) {
+    return "Troca OAuth bloqueada (HTTP 403). Aguarde o cooldown e tente uma única autorização; confira Secret Key e Redirect URI.";
+  }
+  if (lastError.startsWith("kommo_oauth_exchange_429")) {
+    return "Limite de requisições OAuth atingido (HTTP 429). Aguarde alguns minutos antes de autorizar de novo.";
+  }
+  if (lastError.startsWith("kommo_oauth_exchange_503")) {
+    return "Kommo temporariamente indisponível (HTTP 503). Tente novamente em alguns minutos.";
+  }
+  if (lastError.startsWith("kommo_oauth_exchange_")) {
+    return "Falha na troca do código OAuth. Confira Integration ID, Secret Key e Redirect URI desta organização.";
+  }
+  if (lastError === "kommo_oauth_account_mismatch") {
+    return KOMMO_ERROR_MESSAGES.oauth_account_mismatch;
+  }
+  if (lastError === "kommo_oauth_callback_failed") {
+    return KOMMO_ERROR_MESSAGES.oauth_failed;
+  }
+  return "Última tentativa de conexão falhou. Revise a configuração e tente novamente.";
+}
 
 function messageForKommoError(code: string | undefined): string | null {
   if (!code) return null;
@@ -177,8 +202,10 @@ export default async function KommoPage({
                   : "—"}
               </span>
             </p>
-            {connection?.last_error ? (
-              <p className="text-destructive">{connection.last_error}</p>
+            {friendlyLastError(connection?.last_error) ? (
+              <p className="text-destructive">
+                {friendlyLastError(connection?.last_error)}
+              </p>
             ) : null}
           </CardContent>
         </Card>
