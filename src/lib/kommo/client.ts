@@ -75,7 +75,9 @@ export function buildKommoAuthorizeUrl(params: {
   redirectUri?: string;
 }) {
   const redirectUri = params.redirectUri || getKommoRedirectUri();
-  const url = new URL(`https://${params.subdomain}.kommo.com/oauth`);
+  // Kommo's account picker and consent screen always live on the central
+  // OAuth host. The tenant subdomain is used only for API/token requests.
+  const url = new URL("https://www.kommo.com/oauth");
   url.searchParams.set("client_id", params.integrationId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
