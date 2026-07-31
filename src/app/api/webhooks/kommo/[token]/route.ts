@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runKommoWorker } from "@/lib/jobs/run-kommo-worker";
 import {
   detectEventType,
   extractLeadIdsFromWebhookPayload,
@@ -159,6 +160,20 @@ export async function POST(
 
       if (jobError && !isUniqueViolation(jobError)) {
         console.error("jobs insert", jobError.message);
+      } else if (!jobError) {
+        // Respond to Kommo immediately, then drain the PostgreSQL queue in the
+        // request's post-response lifecycle. claim_jobs keeps concurrent
+        // webhook deliveries safe and idempotent.
+        after(async () => {
+          try {
+            await runKommoWorker({
+              limit: 10,
+              workerId: `webhook-${rawEventId}`,
+            });
+          } catch (workerError) {
+            console.error("kommo webhook worker", workerError);
+          }
+        });
       }
     }
 

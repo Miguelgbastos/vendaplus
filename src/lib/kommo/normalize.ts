@@ -238,9 +238,15 @@ export function extractLeadIdsFromWebhookPayload(payload: unknown): string[] {
     if (/lead/i.test(key)) collect(value);
   }
 
-  // Form-urlencoded Kommo style: leads[status][0][id]
+  // Form-urlencoded Kommo style: leads[status][0][id].
+  // Match only the entity id. Custom fields also end in `[id]`
+  // (for example `leads[status][0][custom_fields][0][id]`) and must
+  // never be enqueued as leads.
   for (const [key, value] of Object.entries(root)) {
-    if (/^leads\[/.test(key) && /\[id\]$/.test(key) && value != null) {
+    if (
+      /^leads\[[^\]]+\]\[\d+\]\[id\]$/.test(key) &&
+      value != null
+    ) {
       ids.add(String(value));
     }
   }
