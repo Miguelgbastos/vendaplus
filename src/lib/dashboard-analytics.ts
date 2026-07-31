@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  isActiveMilestone,
-  milestonesForQualification,
-} from "@/lib/kommo/normalize";
+  applyLeadFilters,
+  leadReachedStages,
+  type DashboardFilters,
+} from "@/lib/dashboard-filters";
+import {
+  fetchAllFilteredLeads,
+  fetchAllTenantRows,
+} from "@/lib/dashboard-query";
 import type { QualificationStage } from "@/types/database";
 
 const STAGES: QualificationStage[] = [
@@ -27,6 +32,7 @@ type LeadRow = {
   utm_campaign: string | null;
   utm_content: string | null;
   utm_term: string | null;
+  responsible_user_id: string | null;
   custom_fields: Record<string, unknown> | null;
   first_seen_at: string;
   updated_at: string;
@@ -79,6 +85,7 @@ export type MarketingAnalytics = {
 };
 
 export type CommercialAnalytics = {
+  filteredLeads: number;
   summary: {
     sql: number;
     oportunidade: number;
@@ -115,17 +122,7 @@ function dimension(value: string | null, fallback: string) {
 }
 
 function reachedStages(lead: LeadRow) {
-  const reached = new Set(milestonesForQualification(lead.qualification));
-  const custom = lead.custom_fields ?? {};
-  for (const stage of STAGES) {
-    if (
-      isActiveMilestone(custom[stage]) ||
-      isActiveMilestone(custom[stage.toUpperCase()])
-    ) {
-      reached.add(stage);
-    }
-  }
-  return reached;
+  return leadReachedStages(lead);
 }
 
 function lossReason(lead: LeadRow) {
@@ -188,33 +185,42 @@ function campaignPerformance(leads: LeadRow[]) {
     .sort((a, b) => b.leads - a.leads);
 }
 
-async function loadAnalyticsRows(tenantId: string) {
+async function loadAnalyticsRows(tenantId: string, filters: DashboardFilters) {
   const supabase = await createClient();
-  const [{ data: leads, error: leadsError }, { data: events, error: eventsError }] =
-    await Promise.all([
-      supabase
-        .from("leads")
-        .select(
-          "id, kommo_lead_id, name, qualification, price, status_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, custom_fields, first_seen_at, updated_at",
-        )
-        .eq("tenant_id", tenantId),
-      supabase
-        .from("qualification_history")
-        .select("lead_id, to_qualification, changed_at, metadata")
-        .eq("tenant_id", tenantId),
-    ]);
-  if (leadsError) throw new Error(leadsError.message);
-  if (eventsError) throw new Error(eventsError.message);
+  const [leads, events] = await Promise.all([
+    fetchAllFilteredLeads<LeadRow>(
+      supabase,
+      tenantId,
+      filters,
+      "id, kommo_lead_id, name, qualification, price, status_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, responsible_user_id, custom_fields, first_seen_at, updated_at",
+    ),
+    fetchAllTenantRows<QualificationEvent>(
+      supabase,
+      "qualification_history",
+      tenantId,
+      "lead_id, to_qualification, changed_at, metadata",
+    ),
+  ]);
+
+  const filteredLeads = applyLeadFilters(leads, filters);
+  const leadIds = new Set(filteredLeads.map((lead) => lead.id));
+  const filteredEvents = events.filter((event) => {
+    if (!leadIds.has(event.lead_id)) return false;
+    const day = event.changed_at.slice(0, 10);
+    return day >= filters.from && day <= filters.to;
+  });
+
   return {
-    leads: (leads ?? []) as LeadRow[],
-    events: (events ?? []) as QualificationEvent[],
+    leads: filteredLeads,
+    events: filteredEvents,
   };
 }
 
 export async function loadMarketingAnalytics(
   tenantId: string,
+  filters: DashboardFilters,
 ): Promise<MarketingAnalytics> {
-  const { leads, events } = await loadAnalyticsRows(tenantId);
+  const { leads, events } = await loadAnalyticsRows(tenantId, filters);
   const counts = stageCounts(leads);
   const campaigns = campaignPerformance(leads);
 
@@ -287,8 +293,9 @@ export async function loadMarketingAnalytics(
 
 export async function loadCommercialAnalytics(
   tenantId: string,
+  filters: DashboardFilters,
 ): Promise<CommercialAnalytics> {
-  const { leads } = await loadAnalyticsRows(tenantId);
+  const { leads } = await loadAnalyticsRows(tenantId, filters);
   const counts = stageCounts(leads);
   const commercial = leads.filter((lead) =>
     ["sql", "oportunidade", "negociacao", "venda", "perda"].some((stage) =>
@@ -316,6 +323,7 @@ export async function loadCommercialAnalytics(
   }));
 
   return {
+    filteredLeads: leads.length,
     summary: {
       sql: counts.sql,
       oportunidade: counts.oportunidade,

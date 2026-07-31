@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyBRL, formatNumber } from "@/lib/utils";
 import type { DashboardMetrics } from "@/types/database";
+import { FiltersEmptyState } from "./analytics-ui";
 
 function Metric({
   label,
@@ -37,7 +38,17 @@ function Metric({
   );
 }
 
-export function MetricsGrid({ metrics }: { metrics: DashboardMetrics }) {
+export function MetricsGrid({
+  metrics,
+  empty = false,
+}: {
+  metrics: DashboardMetrics;
+  empty?: boolean;
+}) {
+  if (empty) {
+    return <FiltersEmptyState />;
+  }
+
   const funnel = [
     { name: "MQL", value: metrics.mql },
     { name: "SAL", value: metrics.sal },
