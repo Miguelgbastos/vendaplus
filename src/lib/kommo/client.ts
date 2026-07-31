@@ -1,13 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { getKommoRedirectUri } from "@/lib/env";
+import {
+  assertKommoTokenResponse,
+  formatKommoOAuthExchangeError,
+  type KommoTokenResponse,
+} from "@/lib/kommo/oauth-exchange";
 
-export type KommoTokenResponse = {
-  token_type: string;
-  expires_in: number;
-  access_token: string;
-  refresh_token: string;
-};
+export type { KommoTokenResponse };
 
 export type TenantKommoCredentials = {
   connectionId: string;
@@ -85,40 +85,6 @@ export function buildKommoAuthorizeUrl(params: {
   return url.toString();
 }
 
-function kommoOAuthError(status: number, body: string) {
-  let detail = "unknown_error";
-  try {
-    const parsed = JSON.parse(body) as {
-      error?: string;
-      error_description?: string;
-      detail?: string;
-      title?: string;
-    };
-    detail =
-      parsed.error_description ||
-      parsed.error ||
-      parsed.detail ||
-      parsed.title ||
-      detail;
-  } catch {
-    // Respostas de proxy/WAF costumam ser HTML ou texto. Removemos marcação e
-    // aceitamos apenas uma mensagem curta e sanitizada, nunca o corpo bruto.
-    const plainText = body
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (plainText) detail = plainText;
-  }
-
-  const safeDetail = detail
-    .replace(/[^a-zA-Z0-9 _.-]/g, "")
-    .trim()
-    .slice(0, 160);
-  return new Error(`kommo_oauth_exchange_${status}:${safeDetail}`);
-}
-
 export async function exchangeKommoCode(params: {
   code: string;
   subdomain: string;
@@ -146,9 +112,10 @@ export async function exchangeKommoCode(params: {
   );
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw kommoOAuthError(res.status, body);
+    throw new Error(formatKommoOAuthExchangeError(res.status, body, res.headers));
   }
-  return (await res.json()) as KommoTokenResponse;
+  const json: unknown = await res.json();
+  return assertKommoTokenResponse(json);
 }
 
 export async function refreshKommoToken(params: {
@@ -177,10 +144,11 @@ export async function refreshKommoToken(params: {
     },
   );
   if (!res.ok) {
-    await res.text().catch(() => "");
-    throw new Error(`Falha no refresh OAuth Kommo: ${res.status}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(formatKommoOAuthExchangeError(res.status, body, res.headers));
   }
-  return (await res.json()) as KommoTokenResponse;
+  const json: unknown = await res.json();
+  return assertKommoTokenResponse(json);
 }
 
 export async function getValidAccessToken(tenantId: string): Promise<{

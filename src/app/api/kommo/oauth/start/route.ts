@@ -5,6 +5,7 @@ import {
   buildKommoAuthorizeUrl,
   loadTenantKommoCredentials,
 } from "@/lib/kommo/client";
+import { shouldBlockOAuthRetry } from "@/lib/kommo/oauth-exchange";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
 
@@ -56,10 +57,29 @@ export async function GET(request: Request) {
     }
 
     const admin = createAdminClient();
+    const { data: connectionMeta } = await admin
+      .from("kommo_connections")
+      .select("id, tenant_id, last_error, updated_at")
+      .eq("tenant_id", tenantId)
+      .eq("id", credentials.connectionId)
+      .maybeSingle();
+
+    if (
+      connectionMeta &&
+      connectionMeta.tenant_id === tenantId &&
+      shouldBlockOAuthRetry({
+        lastError: connectionMeta.last_error,
+        updatedAt: connectionMeta.updated_at,
+      })
+    ) {
+      return redirectKommo("oauth_rate_limited");
+    }
+
     const { error: connectionError } = await admin
       .from("kommo_connections")
       .update({
         status: "pending",
+        last_error: null,
         updated_at: new Date().toISOString(),
       })
       .eq("tenant_id", tenantId)
