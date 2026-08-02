@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     const membership = await getActiveTenant(userId, tenantId);
     if (!membership || membership.tenant.id !== tenantId) {
-      return NextResponse.json({ error: "Sem acesso ao tenant." }, { status: 403 });
+      return NextResponse.json({ error: "Sem acesso à empresa." }, { status: 403 });
     }
     if (!canManageTenant(membership.role)) {
       return NextResponse.json({ error: "Permissão insuficiente." }, { status: 403 });

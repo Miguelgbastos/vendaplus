@@ -1,97 +1,74 @@
 # Venda+
 
-MVP de analytics de marketing e comercial com autenticação Supabase, multi-tenant e integração Kommo **sem n8n**.
-
-## Stack
-
-- Next.js 16 (App Router) + React 19
-- Supabase Auth (SSR) com `src/proxy.ts` e `auth.getClaims()`
-- Postgres (schema em `supabase/migrations/`) + RLS
-- shadcn-style UI (Radix + Tailwind) dark, pt-BR
-- Fila interna (`jobs` + `claim_jobs` com `FOR UPDATE SKIP LOCKED`)
+Plataforma multiempresa de analytics de marketing e comercial, com autenticação Supabase e integração Kommo sem n8n.
 
 ## Arquitetura
 
-```
-Kommo (integração privada por tenant)
-  → UI /kommo salva subdomain + Integration ID + Secret Key (AES-GCM)
-  → OAuth start/callback usam credenciais DAQUELE tenant
-  → webhook /api/webhooks/kommo/[token]
-  → raw_events + jobs
-  → worker processa com refresh OAuth do mesmo tenant
-```
+- Next.js 16 (App Router) e React 19.
+- Supabase Auth SSR com cookies, `auth.getClaims()` no servidor e RLS em todas as tabelas públicas.
+- Kommo por empresa: credenciais privadas e tokens criptografados no banco; OAuth, webhook e fila isolados por `tenant_id`.
+- Menu **Configurações** com Supabase, Kommo, Usuários e Empresas.
 
-### Módulos principais
+Na interface e na documentação, o domínio usa **empresa**. O banco preserva `tenants`, `tenant_users` e `tenant_id` por compatibilidade com dados, RLS, webhooks e integrações existentes. Uma troca física desses nomes seria uma migration destrutiva e não agrega isolamento ou segurança.
 
-| Área | Caminho |
-|------|---------|
-| Proxy Auth | `src/proxy.ts` |
-| Clientes Supabase | `src/lib/supabase/*` |
-| AES-GCM + state OAuth | `src/lib/crypto.ts` |
-| Cliente Kommo (por tenant) | `src/lib/kommo/client.ts` |
-| Credenciais API | `src/app/api/kommo/credentials/route.ts` |
-| Migrations | `supabase/migrations/` |
+O inventário técnico detalhado e as decisões estão em [`docs/architecture.md`](docs/architecture.md).
 
-## Setup
+## Configuração do Supabase
 
-1. Copie o ambiente:
+As credenciais do Supabase permanecem no ambiente do deploy, não em formulários da aplicação:
 
-```bash
-cp .env.example .env.local
-```
+- `NEXT_PUBLIC_SUPABASE_URL`: URL do projeto.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: prefira uma Publishable key `sb_publishable_...`; a chave `anon` legada segue compatível.
+- `SUPABASE_SECRET_KEY`: prefira uma Secret key `sb_secret_...`, somente no servidor.
+- `SUPABASE_SERVICE_ROLE_KEY`: fallback para instalações legadas.
 
-2. Preencha as chaves (não versionadas):
+Variáveis `NEXT_PUBLIC_*` são incorporadas ao bundle do navegador no build do Next.js. A chave secreta ignora RLS e deve ficar no cofre do host. Por isso, cadastrar o Supabase após o deploy exigiria um cofre externo, uma API de configuração em runtime e armazenamento persistente compartilhado; um arquivo local criptografado não é seguro ou confiável em serverless, múltiplos containers ou disco efêmero.
 
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `WORKER_SECRET`
-- `TOKEN_ENCRYPTION_KEY` — 64 hex (32 bytes), ex.: `openssl rand -hex 32`
-- `OAUTH_STATE_SECRET`
-- `NEXT_PUBLIC_APP_URL` — a Redirect URI do Kommo será `{APP_URL}/api/kommo/oauth/callback`
+## Instalação
 
-3. Aplique as migrations no Supabase (você aplica o remoto). Localmente:
+1. Copie `.env.example` para `.env.local` e preencha as variáveis.
+2. Gere segredos fortes:
 
 ```bash
-# 0001_initial.sql + 20260731034402_kommo_private_credentials_per_tenant.sql
+openssl rand -base64 48 # SETUP_SECRET
+openssl rand -hex 32    # TOKEN_ENCRYPTION_KEY
+openssl rand -base64 48 # OAUTH_STATE_SECRET
 ```
 
-4. Instale e rode:
+3. Aplique as migrations em `supabase/migrations/` no projeto correto.
+4. Instale e inicie:
 
 ```bash
 npm install
 npm run dev
 ```
 
-5. Em **Kommo**, configure a integração privada por tenant (Integration ID + Secret Key) e autorize.
+5. Crie a conta do primeiro administrador, abra `/setup`, informe a primeira empresa e `SETUP_SECRET`.
+6. A conclusão roda em transação, concede `owner` ao usuário e grava um lock singleton. Novas tentativas recebem conflito. Remova `SETUP_SECRET` do deploy após concluir.
+7. Abra **Configurações → Kommo** para conectar a empresa.
 
-6. Processe a fila periodicamente:
+Em bancos que já possuem empresas, a migration preenche o lock usando a empresa mais antiga, sem alterar ou apagar dados.
 
-```bash
-curl -X POST "$NEXT_PUBLIC_APP_URL/api/workers/process" \
-  -H "Authorization: Bearer $WORKER_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"limit":10}'
-```
+## Variáveis adicionais
 
-## Fluxos de produto
-
-- **Auth:** `/login`, `/cadastro`
-- **Shell:** dashboards, Admin, assistente Kommo
-- **Kommo:** credenciais por tenant → OAuth → webhook
-- **Sem** `KOMMO_CLIENT_ID` / `KOMMO_CLIENT_SECRET` globais
+- `NEXT_PUBLIC_APP_URL`: URL pública; o redirect do Kommo é `{APP_URL}/api/kommo/oauth/callback`.
+- `WORKER_SECRET`: protege o processador da fila.
+- `TOKEN_ENCRYPTION_KEY`: AES-256-GCM para credenciais Kommo.
+- `OAUTH_STATE_SECRET`: HMAC do estado OAuth.
 
 ## Segurança
 
-- RLS em todas as tabelas `public`
-- `integration_id`, `client_secret_encrypted`, access/refresh tokens: **sem SELECT** para `authenticated`
-- Secret Key criptografada (AES-GCM); nunca retornada ao client
-- OAuth state one-time; isolamento estrito por `tenant_id` no load de credenciais
-- Worker protegido por `WORKER_SECRET`
+- Publishable/anon somente no cliente; Secret/service role somente no servidor.
+- RLS permanece a fronteira de isolamento multiempresa.
+- `app_installations` tem RLS sem policies para clientes e acesso apenas pelo servidor.
+- A instalação compara `SETUP_SECRET` em tempo constante e usa função transacional com advisory lock.
+- Tokens e Secret Key do Kommo nunca retornam ao navegador.
+- Credenciais Kommo são isoladas por empresa e o worker exige segredo próprio.
 
-## Scripts
+## Verificação
 
 ```bash
+npm test
 npm run lint
 npm run build
-npm run dev
 ```

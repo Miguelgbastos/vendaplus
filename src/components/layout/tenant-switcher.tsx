@@ -44,7 +44,7 @@ export function TenantSwitcher({
 
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error || "Não foi possível trocar de organização.");
+      setError(data.error || "Não foi possível trocar de empresa.");
       return;
     }
 
@@ -56,7 +56,7 @@ export function TenantSwitcher({
   if (!tenants.length) {
     return (
       <p className={cn("text-xs text-muted-foreground", className)}>
-        Sem organização
+        Sem empresa
       </p>
     );
   }
@@ -64,7 +64,7 @@ export function TenantSwitcher({
   return (
     <div className={cn("space-y-1.5", className)}>
       <label htmlFor="tenant-switcher" className="sr-only">
-        Organização ativa
+        Empresa ativa
       </label>
       <div className="relative">
         <Building2

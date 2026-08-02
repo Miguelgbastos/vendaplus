@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const KOMMO_ERROR_MESSAGES: Record<string, string> = {
   kommo_not_configured:
-    "Salve a configuração da integração privada deste tenant (subdomínio, Integration ID e Secret Key) antes de autorizar.",
+    "Salve a configuração da integração privada desta empresa (subdomínio, Integration ID e Secret Key) antes de autorizar.",
   invalid_subdomain:
     "Subdomínio inválido. Use apenas o nome da conta (ex.: minhaempresa) ou minhaempresa.kommo.com.",
   oauth_missing: "Não foi possível iniciar a conexão. Tente novamente.",
@@ -22,7 +22,7 @@ const KOMMO_ERROR_MESSAGES: Record<string, string> = {
   oauth_rate_limited:
     "Muitas tentativas recentes foram bloqueadas pelo Kommo (403/429). Aguarde cerca de 5 minutos e autorize uma única vez.",
   oauth_account_mismatch:
-    "A conta autorizada no Kommo não corresponde ao subdomínio configurado para esta organização.",
+    "A conta autorizada no Kommo não corresponde ao subdomínio configurado para esta empresa.",
   oauth_state_used:
     "Este link de autorização já foi usado ou expirou. Inicie a conexão novamente.",
   oauth_user_mismatch:
@@ -42,7 +42,7 @@ function friendlyLastError(lastError: string | null | undefined): string | null 
     return "Kommo temporariamente indisponível (HTTP 503). Tente novamente em alguns minutos.";
   }
   if (lastError.startsWith("kommo_oauth_exchange_")) {
-    return "Falha na troca do código OAuth. Confira Integration ID, Secret Key e Redirect URI desta organização.";
+    return "Falha na troca do código OAuth. Confira Integration ID, Secret Key e Redirect URI desta empresa.";
   }
   if (lastError === "kommo_oauth_account_mismatch") {
     return KOMMO_ERROR_MESSAGES.oauth_account_mismatch;
@@ -76,7 +76,7 @@ export default async function KommoPage({
       <div>
         <h1 className="font-display text-3xl font-semibold text-foreground">Kommo</h1>
         <p className="mt-2 text-muted-foreground">
-          Crie um tenant antes de conectar o Kommo.
+          Crie uma empresa antes de conectar o Kommo.
         </p>
       </div>
     );
@@ -152,7 +152,7 @@ export default async function KommoPage({
           Integração Kommo
         </h1>
         <p className="text-sm text-muted-foreground">
-          Onboarding guiado da integração privada por organização.
+          Onboarding guiado da integração privada por empresa.
         </p>
         {isAdmin ? <KommoStepper current={currentStep} /> : null}
       </div>
@@ -270,9 +270,9 @@ export default async function KommoPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Passo 3 — Credenciais deste tenant</CardTitle>
+              <CardTitle>Passo 3 — Credenciais desta empresa</CardTitle>
               <CardDescription>
-                Subdomínio, Integration ID e Secret Key. Isolados por organização.
+                Subdomínio, Integration ID e Secret Key. Isolados por empresa.
               </CardDescription>
             </CardHeader>
             <CardContent>

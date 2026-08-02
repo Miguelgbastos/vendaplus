@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "tenant_id inválido." }, { status: 400 });
+    return NextResponse.json({ error: "Empresa inválida." }, { status: 400 });
   }
 
   const tenantId = parsed.data.tenant_id;

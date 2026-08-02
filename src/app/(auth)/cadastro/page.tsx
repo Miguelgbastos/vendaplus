@@ -12,7 +12,7 @@ export default function SignupPage() {
           </p>
           <CardTitle className="pt-2 text-lg">Criar conta</CardTitle>
           <CardDescription>
-            Comece com sua organização e conecte o Kommo em seguida.
+            Crie sua conta. Empresas e acessos são configurados pelo administrador.
           </CardDescription>
         </CardHeader>
         <CardContent>

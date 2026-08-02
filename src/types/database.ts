@@ -31,6 +31,10 @@ export type Tenant = {
   is_active: boolean;
 };
 
+/** Nome de domínio exibido no produto; Tenant permanece como contrato do banco. */
+export type Company = Tenant;
+export type CompanyRole = TenantRole;
+
 export type TenantUser = {
   id: string;
   tenant_id: string;
