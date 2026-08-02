@@ -22,7 +22,7 @@ function mapCreateTenantError(message: string | undefined): string {
   if (/invalid_tenant_slug/i.test(raw)) {
     return "Nome inválido para gerar o identificador. Tente outro.";
   }
-  return raw || "Não foi possível criar a organização.";
+  return raw || "Não foi possível criar a empresa.";
 }
 
 export function CreateTenantForm() {
@@ -74,7 +74,7 @@ export function CreateTenantForm() {
       };
       setError(
         data.error ||
-          "Organização criada, mas não foi possível ativá-la. Selecione-a no menu.",
+          "Empresa criada, mas não foi possível ativá-la. Selecione-a no menu.",
       );
       router.refresh();
       return;
@@ -88,7 +88,7 @@ export function CreateTenantForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
       <div className="flex-1 space-y-2">
-        <Label htmlFor="tenant">Nova organização</Label>
+        <Label htmlFor="tenant">Nova empresa</Label>
         <Input
           id="tenant"
           required

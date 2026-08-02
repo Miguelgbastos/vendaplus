@@ -16,7 +16,7 @@ export default async function UsersAdminPage() {
         <h1 className="font-display text-3xl font-semibold text-foreground">
           Usuários
         </h1>
-        <p className="mt-2 text-muted-foreground">Selecione ou crie um tenant primeiro.</p>
+        <p className="mt-2 text-muted-foreground">Selecione ou crie uma empresa primeiro.</p>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export default async function UsersAdminPage() {
           Usuários
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Membros de {membership.tenant.name} (papéis owner/admin/analyst/viewer).
+          Membros de {membership.tenant.name} (proprietário, administrador, analista e leitor).
         </p>
       </div>
 

@@ -4,12 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
-  Building2,
-  Link2,
   LogOut,
   Megaphone,
   LayoutDashboard,
-  Users,
+  Settings,
   Menu,
   X,
 } from "lucide-react";
@@ -26,9 +24,7 @@ const NAV = [
   { href: "/dashboard", label: "Geral", icon: LayoutDashboard },
   { href: "/dashboard/marketing", label: "Marketing", icon: Megaphone },
   { href: "/dashboard/comercial", label: "Comercial", icon: BarChart3 },
-  { href: "/kommo", label: "Kommo", icon: Link2 },
-  { href: "/admin/tenants", label: "Tenants", icon: Building2 },
-  { href: "/admin/usuarios", label: "Usuários", icon: Users },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 function NavLinks({
@@ -100,7 +96,7 @@ export function AppShell({
               Venda<span className="text-primary">+</span>
             </p>
             <p className="mt-1 truncate text-xs text-muted-foreground">
-              {tenantName || "Sem organização"}
+              {tenantName || "Sem empresa"}
             </p>
           </div>
           <div className="mb-6 px-0">
@@ -130,7 +126,7 @@ export function AppShell({
                 Venda<span className="text-primary">+</span>
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {tenantName || "Sem organização"}
+                {tenantName || "Sem empresa"}
               </p>
             </div>
             <Button

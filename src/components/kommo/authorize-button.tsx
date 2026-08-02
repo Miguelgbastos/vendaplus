@@ -38,7 +38,7 @@ export function KommoAuthorizeButton({
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Você será redirecionado ao Kommo para conceder acesso a esta organização.
+          Você será redirecionado ao Kommo para conceder acesso a esta empresa.
         </p>
       )}
     </div>

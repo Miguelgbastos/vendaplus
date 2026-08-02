@@ -166,7 +166,7 @@ export async function getValidAccessToken(tenantId: string): Promise<{
     .maybeSingle();
 
   if (error || !data) {
-    throw new Error("Conexão Kommo não encontrada para o tenant.");
+    throw new Error("Conexão Kommo não encontrada para a empresa.");
   }
 
   const connection = data as ConnectionSecretsRow;

@@ -24,7 +24,7 @@ export default async function DashboardPage({
           Dashboard geral
         </h1>
         <p className="text-muted-foreground">
-          Crie ou entre em uma organização em Admin → Tenants para ver métricas.
+          Crie ou selecione uma empresa em Configurações → Empresas para ver métricas.
         </p>
       </div>
     );
