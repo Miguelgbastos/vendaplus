@@ -8,6 +8,7 @@ Plataforma multiempresa de analytics de marketing e comercial, com autenticaçã
 - Supabase Auth SSR com cookies, `auth.getClaims()` no servidor e RLS em todas as tabelas públicas.
 - Kommo por empresa: credenciais privadas e tokens criptografados no banco; OAuth, webhook e fila isolados por `tenant_id`.
 - Menu **Configurações** com Supabase, Kommo, Usuários e Empresas.
+- Gestão de acesso por empresa: proprietários e administradores adicionam usuários por e-mail, definem papéis e removem vínculos sem compartilhar dados entre empresas.
 
 Na interface e na documentação, o domínio usa **empresa**. O banco preserva `tenants`, `tenant_users` e `tenant_id` por compatibilidade com dados, RLS, webhooks e integrações existentes. Uma troca física desses nomes seria uma migration destrutiva e não agrega isolamento ou segurança.
 
@@ -60,6 +61,7 @@ Em bancos que já possuem empresas, a migration preenche o lock usando a empresa
 
 - Publishable/anon somente no cliente; Secret/service role somente no servidor.
 - RLS permanece a fronteira de isolamento multiempresa.
+- Alterações de acesso usam uma função transacional autenticada; mutações diretas em `tenant_users` são bloqueadas.
 - `app_installations` tem RLS sem policies para clientes e acesso apenas pelo servidor.
 - A instalação compara `SETUP_SECRET` em tempo constante e usa função transacional com advisory lock.
 - Tokens e Secret Key do Kommo nunca retornam ao navegador.
