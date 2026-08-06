@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { cachedDashboardQuery } from "@/lib/dashboard-cache";
 import {
   buildDimensionOptions,
   buildOwnerOptions,
@@ -6,7 +6,8 @@ import {
   stageFilterOptions,
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
-import { fetchDateScopedOptionLeads } from "@/lib/dashboard-query";
+import { fetchDashboardFilterOptionRows } from "@/lib/dashboard-rpc";
+import type { DashboardFilterOptionRow } from "@/types/database";
 
 export type DashboardFilterOption = { value: string; label: string };
 
@@ -16,13 +17,6 @@ export type DashboardFilterOptions = {
   media: DashboardFilterOption[];
   owners: DashboardFilterOption[];
   stages: DashboardFilterOption[];
-};
-
-export type OptionLeadRow = {
-  utm_source: string | null;
-  utm_medium: string | null;
-  utm_campaign: string | null;
-  responsible_user_id: string | null;
 };
 
 function ensureSelectedOption(
@@ -36,40 +30,36 @@ function ensureSelectedOption(
   return [...options, { value: selected, label: labelFor(selected) }];
 }
 
-/** Build filter dropdowns from lead rows (typically date-scoped, not dimension-scoped). */
+/** Build filter dropdowns from distinct dimension values (null = blank present). */
 export function buildDashboardFilterOptions(
-  rows: OptionLeadRow[],
+  rows: DashboardFilterOptionRow[],
   selected?: Pick<
     DashboardFilters,
     "campaign" | "source" | "medium" | "owner"
   >,
 ): DashboardFilterOptions {
+  const valuesFor = (dimension: DashboardFilterOptionRow["dimension"]) =>
+    rows
+      .filter((row) => row.dimension === dimension)
+      .map((row) => row.value);
+
   const campaigns = ensureSelectedOption(
-    buildDimensionOptions(
-      rows.map((row) => row.utm_campaign),
-      "Sem campanha",
-    ),
+    buildDimensionOptions(valuesFor("campaign"), "Sem campanha"),
     selected?.campaign,
     (value) => value.replace(/_/g, " "),
   );
   const sources = ensureSelectedOption(
-    buildDimensionOptions(
-      rows.map((row) => row.utm_source),
-      "Sem origem",
-    ),
+    buildDimensionOptions(valuesFor("source"), "Sem origem"),
     selected?.source,
     (value) => value.replace(/_/g, " "),
   );
   const media = ensureSelectedOption(
-    buildDimensionOptions(
-      rows.map((row) => row.utm_medium),
-      "Sem mídia",
-    ),
+    buildDimensionOptions(valuesFor("medium"), "Sem mídia"),
     selected?.medium,
     (value) => value.replace(/_/g, " "),
   );
   const owners = ensureSelectedOption(
-    buildOwnerOptions(rows.map((row) => row.responsible_user_id)),
+    buildOwnerOptions(valuesFor("owner")),
     selected?.owner,
     (value) => (/^\d+$/.test(value) ? `#${value}` : value),
   );
@@ -91,12 +81,12 @@ export async function loadDashboardFilterOptions(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<DashboardFilterOptions> {
-  const supabase = await createClient();
-  const rows = await fetchDateScopedOptionLeads<OptionLeadRow>(
-    supabase,
+  // Só o período define os valores distintos; a seleção ativa entra depois.
+  const rows = await cachedDashboardQuery(
+    "filter-options",
     tenantId,
-    filters,
-    "utm_source, utm_medium, utm_campaign, responsible_user_id",
+    `${filters.from}|${filters.to}`,
+    (supabase) => fetchDashboardFilterOptionRows(supabase, tenantId, filters),
   );
   return buildDashboardFilterOptions(rows, filters);
 }

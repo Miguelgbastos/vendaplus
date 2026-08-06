@@ -66,6 +66,60 @@ export type KommoConnection = {
   has_client_secret?: boolean;
 };
 
+/** Row shapes returned by the dashboard aggregate RPCs (migration dashboard_aggregates). */
+export type DashboardStageCountsRow = {
+  leads_total: number;
+  mql: number;
+  sal: number;
+  sql: number;
+  oportunidade: number;
+  negociacao: number;
+  venda: number;
+  perda: number;
+  receita_fechada: number | string;
+  utm_complete: number;
+};
+
+export type DashboardDimension = "campaign" | "source" | "medium" | "content";
+
+export type DashboardDimensionPerformanceRow = {
+  name: string;
+  leads: number;
+  mql: number;
+  sal: number;
+  sql: number;
+  oportunidade: number;
+  negociacao: number;
+  venda: number;
+  perda: number;
+};
+
+export type DashboardFilterOptionRow = {
+  dimension: "campaign" | "source" | "medium" | "owner";
+  value: string | null;
+};
+
+export type DashboardTrendRow = {
+  day: string;
+  stage: QualificationStage;
+  total: number;
+};
+
+export type DashboardNameValueRow = {
+  name: string;
+  value: number;
+};
+
+export type DashboardRecentLeadRow = {
+  id: string;
+  kommo_lead_id: string | null;
+  name: string | null;
+  qualification: QualificationStage | null;
+  utm_campaign: string | null;
+  loss_reason: string | null;
+  updated_at: string;
+};
+
 export type DashboardMetrics = {
   leadsTotal: number;
   mql: number;
