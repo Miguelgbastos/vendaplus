@@ -76,13 +76,14 @@ export function DashboardFiltersBar({
   const pathname = usePathname();
   const [from, setFrom] = useState(filters.from);
   const [to, setTo] = useState(filters.to);
-  const committedRef = useRef({ from: filters.from, to: filters.to });
+  // Optimistic base for URL patches so rapid changes don't read stale props.
+  const pendingRef = useRef<DashboardFilters>(filters);
 
   useEffect(() => {
     setFrom(filters.from);
     setTo(filters.to);
-    committedRef.current = { from: filters.from, to: filters.to };
-  }, [filters.from, filters.to]);
+    pendingRef.current = filters;
+  }, [filters]);
 
   function pushFilters(next: DashboardFilters) {
     const params = serializeDashboardFilters(next);
@@ -94,21 +95,22 @@ export function DashboardFiltersBar({
   }
 
   function patch(partial: Partial<DashboardFilters>) {
+    const base = pendingRef.current;
     const next: DashboardFilters = {
-      from: partial.from ?? filters.from,
-      to: partial.to ?? filters.to,
+      from: partial.from ?? base.from,
+      to: partial.to ?? base.to,
     };
-    const campaign =
-      "campaign" in partial ? partial.campaign : filters.campaign;
-    const source = "source" in partial ? partial.source : filters.source;
-    const medium = "medium" in partial ? partial.medium : filters.medium;
-    const owner = "owner" in partial ? partial.owner : filters.owner;
-    const stage = "stage" in partial ? partial.stage : filters.stage;
+    const campaign = "campaign" in partial ? partial.campaign : base.campaign;
+    const source = "source" in partial ? partial.source : base.source;
+    const medium = "medium" in partial ? partial.medium : base.medium;
+    const owner = "owner" in partial ? partial.owner : base.owner;
+    const stage = "stage" in partial ? partial.stage : base.stage;
     if (campaign) next.campaign = campaign;
     if (source) next.source = source;
     if (medium) next.medium = medium;
     if (owner) next.owner = owner;
     if (stage) next.stage = stage;
+    pendingRef.current = next;
     pushFilters(next);
   }
 
@@ -120,8 +122,7 @@ export function DashboardFiltersBar({
 
   function commitDate(key: "from" | "to", value: string) {
     if (!DATE_RE.test(value)) return;
-    if (committedRef.current[key] === value) return;
-    committedRef.current = { ...committedRef.current, [key]: value };
+    if (pendingRef.current[key] === value) return;
     patch({ [key]: value });
   }
 
@@ -139,8 +140,8 @@ export function DashboardFiltersBar({
       commitDate(key, value);
       return;
     }
-    if (key === "from") setFrom(filters.from);
-    else setTo(filters.to);
+    if (key === "from") setFrom(pendingRef.current.from);
+    else setTo(pendingRef.current.to);
   }
 
   return (
