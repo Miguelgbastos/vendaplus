@@ -87,13 +87,19 @@ export function formatOwnerLabel(ownerId: string): string {
   return /^\d+$/.test(ownerId) ? `#${ownerId}` : ownerId;
 }
 
-export function todayInSaoPaulo(now = new Date()): string {
+export function ymdInSaoPaulo(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: FILTER_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(now);
+  }).format(date);
+}
+
+export function todayInSaoPaulo(now = new Date()): string {
+  return ymdInSaoPaulo(now);
 }
 
 export function addDaysYmd(ymd: string, days: number): string {

@@ -1,3 +1,4 @@
+import { createClient } from "@/lib/supabase/server";
 import {
   buildDimensionOptions,
   buildOwnerOptions,
@@ -5,6 +6,7 @@ import {
   stageFilterOptions,
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
+import { fetchDateScopedOptionLeads } from "@/lib/dashboard-query";
 
 export type DashboardFilterOption = { value: string; label: string };
 
@@ -34,7 +36,7 @@ function ensureSelectedOption(
   return [...options, { value: selected, label: labelFor(selected) }];
 }
 
-/** Build filter dropdowns from leads already loaded for the current range. */
+/** Build filter dropdowns from lead rows (typically date-scoped, not dimension-scoped). */
 export function buildDashboardFilterOptions(
   rows: OptionLeadRow[],
   selected?: Pick<
@@ -79,4 +81,22 @@ export function buildDashboardFilterOptions(
     owners,
     stages: stageFilterOptions(),
   };
+}
+
+/**
+ * Options for the active date range, ignoring campaign/source/medium/owner
+ * so the user can switch dimensions without losing other period choices.
+ */
+export async function loadDashboardFilterOptions(
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardFilterOptions> {
+  const supabase = await createClient();
+  const rows = await fetchDateScopedOptionLeads<OptionLeadRow>(
+    supabase,
+    tenantId,
+    filters,
+    "utm_source, utm_medium, utm_campaign, responsible_user_id",
+  );
+  return buildDashboardFilterOptions(rows, filters);
 }

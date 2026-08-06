@@ -2,10 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import {
   applyLeadFilters,
   leadReachedStages,
+  ymdInSaoPaulo,
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import {
-  buildDashboardFilterOptions,
+  loadDashboardFilterOptions,
   type DashboardFilterOptions,
 } from "@/lib/dashboard-filter-options";
 import {
@@ -238,9 +239,10 @@ export async function loadMarketingAnalytics(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<MarketingAnalyticsBundle> {
-  const { leads, events } = await loadAnalyticsRows(tenantId, filters, {
-    includeEvents: true,
-  });
+  const [{ leads, events }, filterOptions] = await Promise.all([
+    loadAnalyticsRows(tenantId, filters, { includeEvents: true }),
+    loadDashboardFilterOptions(tenantId, filters),
+  ]);
   const counts = stageCounts(leads);
   const campaigns = campaignPerformance(leads);
 
@@ -249,7 +251,9 @@ export async function loadMarketingAnalytics(
     if (event.metadata?.inferred === true || event.metadata?.inferred === "true") {
       continue;
     }
-    const day = event.changed_at.slice(0, 10);
+    // Bucket by São Paulo calendar day (SQL bounds use the same timezone).
+    const day = ymdInSaoPaulo(event.changed_at);
+    if (!day || day < filters.from || day > filters.to) continue;
     const row = trendMap.get(day) ?? { date: day };
     row[event.to_qualification] = Number(row[event.to_qualification] ?? 0) + 1;
     trendMap.set(day, row);
@@ -310,7 +314,7 @@ export async function loadMarketingAnalytics(
         { name: "UTMs incompletas", value: leads.length - completeUtms },
       ],
     },
-    filterOptions: buildDashboardFilterOptions(leads, filters),
+    filterOptions,
   };
 }
 
@@ -318,9 +322,10 @@ export async function loadCommercialAnalytics(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<CommercialAnalyticsBundle> {
-  const { leads } = await loadAnalyticsRows(tenantId, filters, {
-    includeEvents: false,
-  });
+  const [{ leads }, filterOptions] = await Promise.all([
+    loadAnalyticsRows(tenantId, filters, { includeEvents: false }),
+    loadDashboardFilterOptions(tenantId, filters),
+  ]);
   const counts = stageCounts(leads);
   const commercial = leads.filter((lead) =>
     ["sql", "oportunidade", "negociacao", "venda", "perda"].some((stage) =>
@@ -384,6 +389,6 @@ export async function loadCommercialAnalytics(
           updatedAt: lead.updated_at,
         })),
     },
-    filterOptions: buildDashboardFilterOptions(leads, filters),
+    filterOptions,
   };
 }

@@ -5,7 +5,7 @@ import {
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import {
-  buildDashboardFilterOptions,
+  loadDashboardFilterOptions,
   type DashboardFilterOptions,
 } from "@/lib/dashboard-filter-options";
 import { fetchAllFilteredLeads } from "@/lib/dashboard-query";
@@ -42,12 +42,15 @@ export async function loadDashboardMetrics(
   filters: DashboardFilters,
 ): Promise<DashboardMetricsBundle> {
   const supabase = await createClient();
-  const leads = await fetchAllFilteredLeads<MetricsLeadRow>(
-    supabase,
-    tenantId,
-    filters,
-    "qualification, price, custom_fields, utm_source, utm_medium, utm_campaign, responsible_user_id, first_seen_at",
-  );
+  const [leads, filterOptions] = await Promise.all([
+    fetchAllFilteredLeads<MetricsLeadRow>(
+      supabase,
+      tenantId,
+      filters,
+      "qualification, price, custom_fields, utm_source, utm_medium, utm_campaign, responsible_user_id, first_seen_at",
+    ),
+    loadDashboardFilterOptions(tenantId, filters),
+  ]);
 
   const rows = applyLeadFilters(leads, filters);
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<
@@ -85,6 +88,6 @@ export async function loadDashboardMetrics(
       receitaFechada,
       taxaConversao,
     },
-    filterOptions: buildDashboardFilterOptions(rows, filters),
+    filterOptions,
   };
 }
