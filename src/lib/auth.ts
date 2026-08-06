@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveTenantIdFromCookie } from "@/lib/tenant-cookie";
 import { resolveActiveMembership } from "@/lib/resolve-active-membership";
 import type { Tenant, TenantRole, TenantUser } from "@/types/database";
 
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims?.sub) {
@@ -14,13 +15,13 @@ export async function requireUser() {
     userId: data.claims.sub as string,
     claims: data.claims,
   };
-}
+});
 
 export type Membership = TenantUser & {
   tenants: Tenant | null;
 };
 
-export async function getUserMemberships(userId: string) {
+export const getUserMemberships = cache(async (userId: string) => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tenant_users")
@@ -34,17 +35,17 @@ export async function getUserMemberships(userId: string) {
   }
 
   return (data ?? []) as unknown as Membership[];
-}
+});
 
 /**
  * Resolve o tenant ativo.
  * - Sem preferredTenantId: lê cookie httpOnly e faz fallback seguro.
  * - Com preferredTenantId (APIs): exige membership + tenant ativo; sem fallback.
  */
-export async function getActiveTenant(
+export const getActiveTenant = cache(async (
   userId: string,
   preferredTenantId?: string | null,
-): Promise<{ tenant: Tenant; role: TenantRole } | null> {
+): Promise<{ tenant: Tenant; role: TenantRole } | null> => {
   const memberships = await getUserMemberships(userId);
   if (!memberships.length) return null;
 
@@ -59,7 +60,7 @@ export async function getActiveTenant(
 
   if (!match?.tenants) return null;
   return { tenant: match.tenants, role: match.role };
-}
+});
 
 export function canManageTenant(role: TenantRole): boolean {
   return role === "owner" || role === "admin";

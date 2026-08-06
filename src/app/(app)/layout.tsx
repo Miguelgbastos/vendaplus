@@ -24,6 +24,7 @@ export default async function AppLayout({
     .eq("id", userId)
     .maybeSingle();
 
+  // getActiveTenant reuses getUserMemberships via React.cache (same request).
   const [membership, memberships] = await Promise.all([
     getActiveTenant(userId),
     getUserMemberships(userId),

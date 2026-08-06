@@ -4,6 +4,10 @@ import {
   leadReachedStages,
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
+import {
+  loadDashboardFilterOptions,
+  type DashboardFilterOptions,
+} from "@/lib/dashboard-filter-options";
 import { fetchAllFilteredLeads } from "@/lib/dashboard-query";
 import type { DashboardMetrics, QualificationStage } from "@/types/database";
 
@@ -28,17 +32,25 @@ type MetricsLeadRow = {
   first_seen_at: string;
 };
 
+export type DashboardMetricsBundle = {
+  metrics: DashboardMetrics;
+  filterOptions: DashboardFilterOptions;
+};
+
 export async function loadDashboardMetrics(
   tenantId: string,
   filters: DashboardFilters,
-): Promise<DashboardMetrics> {
+): Promise<DashboardMetricsBundle> {
   const supabase = await createClient();
-  const leads = await fetchAllFilteredLeads<MetricsLeadRow>(
-    supabase,
-    tenantId,
-    filters,
-    "qualification, price, custom_fields, utm_source, utm_medium, utm_campaign, responsible_user_id, first_seen_at",
-  );
+  const [leads, filterOptions] = await Promise.all([
+    fetchAllFilteredLeads<MetricsLeadRow>(
+      supabase,
+      tenantId,
+      filters,
+      "qualification, price, custom_fields, utm_source, utm_medium, utm_campaign, responsible_user_id, first_seen_at",
+    ),
+    loadDashboardFilterOptions(tenantId, filters),
+  ]);
 
   const rows = applyLeadFilters(leads, filters);
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<
@@ -70,9 +82,12 @@ export async function loadDashboardMetrics(
     leadsTotal > 0 ? Math.round((counts.venda / leadsTotal) * 1000) / 10 : 0;
 
   return {
-    leadsTotal,
-    ...counts,
-    receitaFechada,
-    taxaConversao,
+    metrics: {
+      leadsTotal,
+      ...counts,
+      receitaFechada,
+      taxaConversao,
+    },
+    filterOptions,
   };
 }

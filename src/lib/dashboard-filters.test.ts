@@ -9,11 +9,22 @@ import {
   NULL_FILTER_VALUE,
   parseDashboardFilters,
   serializeDashboardFilters,
+  ymdInSaoPaulo,
   type FilterableLead,
 } from "./dashboard-filters.ts";
 
 describe("dashboard-filters", () => {
   const now = new Date("2026-07-31T15:00:00-03:00");
+
+  it("ymdInSaoPaulo usa o dia civil de São Paulo, não o UTC do ISO", () => {
+    // 2026-08-07 01:30 UTC == 2026-08-06 22:30 in America/Sao_Paulo (UTC-3).
+    assert.equal(ymdInSaoPaulo("2026-08-07T01:30:00.000Z"), "2026-08-06");
+    assert.equal(ymdInSaoPaulo("2026-08-06T03:00:00.000Z"), "2026-08-06");
+    assert.notEqual(
+      ymdInSaoPaulo("2026-08-07T01:30:00.000Z"),
+      "2026-08-07T01:30:00.000Z".slice(0, 10),
+    );
+  });
 
   it("aplica default dos últimos 30 dias quando from/to ausentes", () => {
     const { filters, clamped } = parseDashboardFilters({}, now);

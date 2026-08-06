@@ -1,10 +1,18 @@
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { DashboardFiltersBar } from "@/components/dashboards/dashboard-filters";
-import { MarketingAnalyticsDashboard } from "@/components/dashboards/marketing-analytics-dashboard";
+import { DashboardChartsFallback } from "@/components/dashboards/dashboard-charts-fallback";
 import { getActiveTenant, requireUser } from "@/lib/auth";
 import { loadMarketingAnalytics } from "@/lib/dashboard-analytics";
-import { loadDashboardFilterOptions } from "@/lib/dashboard-filter-options";
 import { parseDashboardFilters } from "@/lib/dashboard-filters";
+
+const MarketingAnalyticsDashboard = dynamic(
+  () =>
+    import("@/components/dashboards/marketing-analytics-dashboard").then(
+      (mod) => mod.MarketingAnalyticsDashboard,
+    ),
+  { loading: () => <DashboardChartsFallback /> },
+);
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -20,10 +28,10 @@ export default async function MarketingDashboardPage({
 
   const params = await searchParams;
   const { filters, clamped } = parseDashboardFilters(params);
-  const [analytics, options] = await Promise.all([
-    loadMarketingAnalytics(membership.tenant.id, filters),
-    loadDashboardFilterOptions(membership.tenant.id),
-  ]);
+  const { data: analytics, filterOptions } = await loadMarketingAnalytics(
+    membership.tenant.id,
+    filters,
+  );
 
   return (
     <div className="space-y-6">
@@ -38,7 +46,7 @@ export default async function MarketingDashboardPage({
       </div>
       <DashboardFiltersBar
         filters={filters}
-        options={options}
+        options={filterOptions}
         clamped={clamped}
       />
       <MarketingAnalyticsDashboard
