@@ -1,5 +1,6 @@
 "use client";
 
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/dashboard-filters";
 
 const ALL_VALUE = "__all__";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Props = {
   filters: DashboardFilters;
@@ -72,39 +74,74 @@ export function DashboardFiltersBar({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const [from, setFrom] = useState(filters.from);
+  const [to, setTo] = useState(filters.to);
+  // Optimistic base for URL patches so rapid changes don't read stale props.
+  const pendingRef = useRef<DashboardFilters>(filters);
+
+  useEffect(() => {
+    setFrom(filters.from);
+    setTo(filters.to);
+    pendingRef.current = filters;
+  }, [filters]);
 
   function pushFilters(next: DashboardFilters) {
     const params = serializeDashboardFilters(next);
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    startTransition(() => {
+      router.replace(href, { scroll: false });
+    });
   }
 
   function patch(partial: Partial<DashboardFilters>) {
+    const base = pendingRef.current;
     const next: DashboardFilters = {
-      from: partial.from ?? filters.from,
-      to: partial.to ?? filters.to,
+      from: partial.from ?? base.from,
+      to: partial.to ?? base.to,
     };
-    const campaign =
-      "campaign" in partial ? partial.campaign : filters.campaign;
-    const source = "source" in partial ? partial.source : filters.source;
-    const medium = "medium" in partial ? partial.medium : filters.medium;
-    const owner = "owner" in partial ? partial.owner : filters.owner;
-    const stage = "stage" in partial ? partial.stage : filters.stage;
+    const campaign = "campaign" in partial ? partial.campaign : base.campaign;
+    const source = "source" in partial ? partial.source : base.source;
+    const medium = "medium" in partial ? partial.medium : base.medium;
+    const owner = "owner" in partial ? partial.owner : base.owner;
+    const stage = "stage" in partial ? partial.stage : base.stage;
     if (campaign) next.campaign = campaign;
     if (source) next.source = source;
     if (medium) next.medium = medium;
     if (owner) next.owner = owner;
     if (stage) next.stage = stage;
+    pendingRef.current = next;
     pushFilters(next);
   }
 
   function clear() {
-    router.push(pathname);
+    startTransition(() => {
+      router.replace(pathname, { scroll: false });
+    });
+  }
+
+  function commitDate(key: "from" | "to", value: string) {
+    if (!DATE_RE.test(value)) return;
+    if (pendingRef.current[key] === value) return;
+    patch({ [key]: value });
   }
 
   function onDateChange(key: "from" | "to", value: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    patch({ [key]: value });
+    // WebKit can emit empty values while the picker is open; ignore those.
+    if (!value) return;
+    // Keep draft local so the native picker doesn't snap back while RSC navigates.
+    if (key === "from") setFrom(value);
+    else setTo(value);
+    commitDate(key, value);
+  }
+
+  function onDateBlur(key: "from" | "to", value: string) {
+    if (DATE_RE.test(value)) {
+      commitDate(key, value);
+      return;
+    }
+    if (key === "from") setFrom(pendingRef.current.from);
+    else setTo(pendingRef.current.to);
   }
 
   return (
@@ -119,8 +156,12 @@ export function DashboardFiltersBar({
               id="filter-from"
               type="date"
               aria-label="Data inicial"
-              value={filters.from}
+              value={from}
               onChange={(event) => onDateChange("from", event.target.value)}
+              onInput={(event) =>
+                onDateChange("from", (event.target as HTMLInputElement).value)
+              }
+              onBlur={(event) => onDateBlur("from", event.target.value)}
             />
           </div>
           <div className="w-full min-w-[140px] sm:w-36">
@@ -131,8 +172,12 @@ export function DashboardFiltersBar({
               id="filter-to"
               type="date"
               aria-label="Data final"
-              value={filters.to}
+              value={to}
               onChange={(event) => onDateChange("to", event.target.value)}
+              onInput={(event) =>
+                onDateChange("to", (event.target as HTMLInputElement).value)
+              }
+              onBlur={(event) => onDateBlur("to", event.target.value)}
             />
           </div>
         </div>

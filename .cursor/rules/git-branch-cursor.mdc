@@ -1,0 +1,17 @@
+---
+description: Commits e pushes devem sempre usar a branch cursor
+alwaysApply: true
+---
+
+# Branch de commit: `cursor`
+
+Antes de qualquer `git commit` ou `git push`:
+
+1. **Nunca** commitir direto em `main` / `master`.
+2. Garantir que a branch atual seja `cursor`:
+   - Se não existir: `git checkout -b cursor` (a partir da base atual, em geral `main`).
+   - Se existir em outro lugar: `git checkout cursor` e rebase/merge da base só se o usuário pedir.
+3. Se houver mudanças uncommitted na branch errada, mover o trabalho para `cursor` (`checkout -b cursor` ou stash + checkout) **antes** do commit.
+4. Push e PR devem sair de `cursor` (ex.: `git push -u origin cursor`), nunca de `main`.
+
+Exceção: só commitir em outra branch se o usuário pedir explicitamente nesse turno.
