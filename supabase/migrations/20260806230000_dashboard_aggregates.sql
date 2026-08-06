@@ -425,14 +425,10 @@ as $$
   where l.tenant_id = p_tenant_id
     and l.first_seen_at >= p_from
     and l.first_seen_at < p_to
-    -- Pré-filtro barato no documento inteiro: evita o jsonb_each_text
-    -- (SRF ~0,1ms/linha) em leads sem nenhuma chave/valor candidato.
-    -- Sem translate (O(n×m) ficava caro); só perde chaves com acento dentro
-    -- de "motivo"/"loss", cenário irreal para nomes de campo do Kommo.
-    and (
-      lower(l.custom_fields::text) like '%motivo%'
-      or lower(l.custom_fields::text) like '%loss%'
-    )
+    -- Sem pré-filtro no documento inteiro: um text-search direto (sem translate)
+    -- descartava chaves com acento dentro de "motivo"/"loss" e ficava fora de
+    -- sincronia com dashboard_loss_reason (usado em dashboard_recent_leads),
+    -- fazendo o gráfico contar menos motivos do que aparecia por lead.
     and public.dashboard_dim_match(l.utm_campaign, p_campaign)
     and public.dashboard_dim_match(l.utm_source, p_source)
     and public.dashboard_dim_match(l.utm_medium, p_medium)

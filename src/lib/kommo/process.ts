@@ -51,9 +51,10 @@ export async function processKommoJob(job: JobRow): Promise<void> {
   }
 
   try {
-    // Dados novos aparecem no próximo acesso; fora de contexto de request o
-    // cache ainda expira sozinho em 60s.
-    revalidateTag(dashboardCacheTag(job.tenant_id), "max");
+    // Webhook/worker externo: precisa expirar imediatamente para que o próximo
+    // acesso ao dashboard busque os dados novos, em vez do stale-while-revalidate
+    // do profile "max" (que ainda serviria a agregação anterior à sync).
+    revalidateTag(dashboardCacheTag(job.tenant_id), { expire: 0 });
   } catch {
     // noop
   }
