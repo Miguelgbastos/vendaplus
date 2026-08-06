@@ -1,5 +1,6 @@
 "use client";
 
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/dashboard-filters";
 
 const ALL_VALUE = "__all__";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Props = {
   filters: DashboardFilters;
@@ -72,11 +74,23 @@ export function DashboardFiltersBar({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const [from, setFrom] = useState(filters.from);
+  const [to, setTo] = useState(filters.to);
+  const committedRef = useRef({ from: filters.from, to: filters.to });
+
+  useEffect(() => {
+    setFrom(filters.from);
+    setTo(filters.to);
+    committedRef.current = { from: filters.from, to: filters.to };
+  }, [filters.from, filters.to]);
 
   function pushFilters(next: DashboardFilters) {
     const params = serializeDashboardFilters(next);
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    startTransition(() => {
+      router.replace(href, { scroll: false });
+    });
   }
 
   function patch(partial: Partial<DashboardFilters>) {
@@ -99,12 +113,34 @@ export function DashboardFiltersBar({
   }
 
   function clear() {
-    router.push(pathname);
+    startTransition(() => {
+      router.replace(pathname, { scroll: false });
+    });
+  }
+
+  function commitDate(key: "from" | "to", value: string) {
+    if (!DATE_RE.test(value)) return;
+    if (committedRef.current[key] === value) return;
+    committedRef.current = { ...committedRef.current, [key]: value };
+    patch({ [key]: value });
   }
 
   function onDateChange(key: "from" | "to", value: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    patch({ [key]: value });
+    // WebKit can emit empty values while the picker is open; ignore those.
+    if (!value) return;
+    // Keep draft local so the native picker doesn't snap back while RSC navigates.
+    if (key === "from") setFrom(value);
+    else setTo(value);
+    commitDate(key, value);
+  }
+
+  function onDateBlur(key: "from" | "to", value: string) {
+    if (DATE_RE.test(value)) {
+      commitDate(key, value);
+      return;
+    }
+    if (key === "from") setFrom(filters.from);
+    else setTo(filters.to);
   }
 
   return (
@@ -119,8 +155,12 @@ export function DashboardFiltersBar({
               id="filter-from"
               type="date"
               aria-label="Data inicial"
-              value={filters.from}
+              value={from}
               onChange={(event) => onDateChange("from", event.target.value)}
+              onInput={(event) =>
+                onDateChange("from", (event.target as HTMLInputElement).value)
+              }
+              onBlur={(event) => onDateBlur("from", event.target.value)}
             />
           </div>
           <div className="w-full min-w-[140px] sm:w-36">
@@ -131,8 +171,12 @@ export function DashboardFiltersBar({
               id="filter-to"
               type="date"
               aria-label="Data final"
-              value={filters.to}
+              value={to}
               onChange={(event) => onDateChange("to", event.target.value)}
+              onInput={(event) =>
+                onDateChange("to", (event.target as HTMLInputElement).value)
+              }
+              onBlur={(event) => onDateBlur("to", event.target.value)}
             />
           </div>
         </div>
