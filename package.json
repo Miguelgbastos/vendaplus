@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts src/lib/kommo/normalize.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

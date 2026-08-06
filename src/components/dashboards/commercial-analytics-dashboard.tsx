@@ -42,7 +42,35 @@ export function CommercialAnalyticsDashboard({
 
       <ChartCard title="Resultado comercial por campanha" description="Qualidade das campanhas da entrada até o fechamento">
         <SampleNote />
-        {campaignRows.length === 0 ? <div className="mt-4"><EmptyChart /></div> : <div className="mt-4 h-96"><ResponsiveContainer width="100%" height="100%"><BarChart data={campaignRows} margin={{ left: -15, bottom: 65 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" /><XAxis dataKey="name" tickLine={false} axisLine={false} angle={-25} textAnchor="end" interval={0} fontSize={11} /><YAxis tickLine={false} axisLine={false} allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="sql" name="SQL" fill={CHART_COLORS.blue} radius={[4, 4, 0, 0]} /><Bar dataKey="oportunidade" name="Oportunidade" fill={CHART_COLORS.violet} radius={[4, 4, 0, 0]} /><Bar dataKey="negociacao" name="Negociação" fill={CHART_COLORS.amber} radius={[4, 4, 0, 0]} /><Bar dataKey="venda" name="Venda" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
+        {campaignRows.length === 0 ? (
+          <div className="mt-4"><EmptyChart /></div>
+        ) : (
+          <div className="mt-4 h-[28rem]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={campaignRows} margin={{ left: -15, right: 8, top: 8, bottom: 96 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  angle={-35}
+                  textAnchor="end"
+                  interval={0}
+                  fontSize={11}
+                  height={100}
+                  tickMargin={6}
+                />
+                <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip />
+                <Legend verticalAlign="top" align="center" height={36} wrapperStyle={{ paddingBottom: 8 }} />
+                <Bar dataKey="sql" name="SQL" fill={CHART_COLORS.blue} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="oportunidade" name="Oportunidade" fill={CHART_COLORS.violet} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="negociacao" name="Negociação" fill={CHART_COLORS.amber} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="venda" name="Venda" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </ChartCard>
 
       <div className="grid gap-6 xl:grid-cols-2">

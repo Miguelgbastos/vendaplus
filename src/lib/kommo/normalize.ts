@@ -10,6 +10,19 @@ const QUALIFICATION_ALIASES: Record<QualificationStage, string[]> = {
   perda: ["perda", "lost", "perdido", "closed lost", "fechado perdido"],
 };
 
+/** Kommo/AmoCRM system statuses — fixed across all accounts. */
+export const KOMMO_STATUS_WON = "142";
+export const KOMMO_STATUS_LOST = "143";
+
+export function qualificationFromKommoStatusId(
+  statusId: unknown,
+): QualificationStage | null {
+  const id = str(statusId);
+  if (id === KOMMO_STATUS_WON) return "venda";
+  if (id === KOMMO_STATUS_LOST) return "perda";
+  return null;
+}
+
 const UTM_KEYS = [
   "utm_source",
   "utm_medium",
@@ -250,7 +263,7 @@ export function normalizeKommoLead(
   const bag = { ...custom, ...mapped, ...lead };
   const utm = pickUtm(bag);
 
-  const qualification =
+  const fromText =
     mapQualification(mapped.qualification) ||
     mapQualification(bag.qualification) ||
     inferQualificationFromMilestones(bag) ||
@@ -258,6 +271,10 @@ export function normalizeKommoLead(
     mapQualification(bag.stage) ||
     mapQualification(bag.status_name) ||
     mapQualification(lead.status_name);
+
+  // System won/lost statuses are authoritative over intermediate stage aliases.
+  const qualification =
+    qualificationFromKommoStatusId(lead.status_id) ?? fromText;
 
   return {
     kommoLeadId: str(lead.id),
