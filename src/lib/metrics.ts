@@ -4,6 +4,10 @@ import {
   leadReachedStages,
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
+import {
+  buildDashboardFilterOptions,
+  type DashboardFilterOptions,
+} from "@/lib/dashboard-filter-options";
 import { fetchAllFilteredLeads } from "@/lib/dashboard-query";
 import type { DashboardMetrics, QualificationStage } from "@/types/database";
 
@@ -28,10 +32,15 @@ type MetricsLeadRow = {
   first_seen_at: string;
 };
 
+export type DashboardMetricsBundle = {
+  metrics: DashboardMetrics;
+  filterOptions: DashboardFilterOptions;
+};
+
 export async function loadDashboardMetrics(
   tenantId: string,
   filters: DashboardFilters,
-): Promise<DashboardMetrics> {
+): Promise<DashboardMetricsBundle> {
   const supabase = await createClient();
   const leads = await fetchAllFilteredLeads<MetricsLeadRow>(
     supabase,
@@ -70,9 +79,12 @@ export async function loadDashboardMetrics(
     leadsTotal > 0 ? Math.round((counts.venda / leadsTotal) * 1000) / 10 : 0;
 
   return {
-    leadsTotal,
-    ...counts,
-    receitaFechada,
-    taxaConversao,
+    metrics: {
+      leadsTotal,
+      ...counts,
+      receitaFechada,
+      taxaConversao,
+    },
+    filterOptions: buildDashboardFilterOptions(rows, filters),
   };
 }

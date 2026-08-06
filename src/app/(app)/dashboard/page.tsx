@@ -1,10 +1,18 @@
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { DashboardFiltersBar } from "@/components/dashboards/dashboard-filters";
-import { MetricsGrid } from "@/components/dashboards/metrics-grid";
+import { DashboardChartsFallback } from "@/components/dashboards/dashboard-charts-fallback";
 import { getActiveTenant, requireUser } from "@/lib/auth";
-import { loadDashboardFilterOptions } from "@/lib/dashboard-filter-options";
 import { parseDashboardFilters } from "@/lib/dashboard-filters";
 import { loadDashboardMetrics } from "@/lib/metrics";
+
+const MetricsGrid = dynamic(
+  () =>
+    import("@/components/dashboards/metrics-grid").then(
+      (mod) => mod.MetricsGrid,
+    ),
+  { loading: () => <DashboardChartsFallback /> },
+);
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -32,10 +40,10 @@ export default async function DashboardPage({
 
   const params = await searchParams;
   const { filters, clamped } = parseDashboardFilters(params);
-  const [metrics, options] = await Promise.all([
-    loadDashboardMetrics(membership.tenant.id, filters),
-    loadDashboardFilterOptions(membership.tenant.id),
-  ]);
+  const { metrics, filterOptions } = await loadDashboardMetrics(
+    membership.tenant.id,
+    filters,
+  );
 
   return (
     <div className="space-y-6">
@@ -49,7 +57,7 @@ export default async function DashboardPage({
       </div>
       <DashboardFiltersBar
         filters={filters}
-        options={options}
+        options={filterOptions}
         clamped={clamped}
       />
       <MetricsGrid metrics={metrics} empty={metrics.leadsTotal === 0} />

@@ -5,8 +5,12 @@ import {
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import {
+  buildDashboardFilterOptions,
+  type DashboardFilterOptions,
+} from "@/lib/dashboard-filter-options";
+import {
   fetchAllFilteredLeads,
-  fetchAllTenantRows,
+  fetchFilteredQualificationEvents,
 } from "@/lib/dashboard-query";
 import type { QualificationStage } from "@/types/database";
 
@@ -185,30 +189,34 @@ function campaignPerformance(leads: LeadRow[]) {
     .sort((a, b) => b.leads - a.leads);
 }
 
-async function loadAnalyticsRows(tenantId: string, filters: DashboardFilters) {
+async function loadAnalyticsRows(
+  tenantId: string,
+  filters: DashboardFilters,
+  options: { includeEvents: boolean },
+) {
   const supabase = await createClient();
+  const leadsPromise = fetchAllFilteredLeads<LeadRow>(
+    supabase,
+    tenantId,
+    filters,
+    "id, kommo_lead_id, name, qualification, price, status_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, responsible_user_id, custom_fields, first_seen_at, updated_at",
+  );
+
   const [leads, events] = await Promise.all([
-    fetchAllFilteredLeads<LeadRow>(
-      supabase,
-      tenantId,
-      filters,
-      "id, kommo_lead_id, name, qualification, price, status_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, responsible_user_id, custom_fields, first_seen_at, updated_at",
-    ),
-    fetchAllTenantRows<QualificationEvent>(
-      supabase,
-      "qualification_history",
-      tenantId,
-      "lead_id, to_qualification, changed_at, metadata",
-    ),
+    leadsPromise,
+    options.includeEvents
+      ? fetchFilteredQualificationEvents<QualificationEvent>(
+          supabase,
+          tenantId,
+          filters,
+          "lead_id, to_qualification, changed_at, metadata",
+        )
+      : Promise.resolve([] as QualificationEvent[]),
   ]);
 
   const filteredLeads = applyLeadFilters(leads, filters);
   const leadIds = new Set(filteredLeads.map((lead) => lead.id));
-  const filteredEvents = events.filter((event) => {
-    if (!leadIds.has(event.lead_id)) return false;
-    const day = event.changed_at.slice(0, 10);
-    return day >= filters.from && day <= filters.to;
-  });
+  const filteredEvents = events.filter((event) => leadIds.has(event.lead_id));
 
   return {
     leads: filteredLeads,
@@ -216,11 +224,23 @@ async function loadAnalyticsRows(tenantId: string, filters: DashboardFilters) {
   };
 }
 
+export type MarketingAnalyticsBundle = {
+  data: MarketingAnalytics;
+  filterOptions: DashboardFilterOptions;
+};
+
+export type CommercialAnalyticsBundle = {
+  data: CommercialAnalytics;
+  filterOptions: DashboardFilterOptions;
+};
+
 export async function loadMarketingAnalytics(
   tenantId: string,
   filters: DashboardFilters,
-): Promise<MarketingAnalytics> {
-  const { leads, events } = await loadAnalyticsRows(tenantId, filters);
+): Promise<MarketingAnalyticsBundle> {
+  const { leads, events } = await loadAnalyticsRows(tenantId, filters, {
+    includeEvents: true,
+  });
   const counts = stageCounts(leads);
   const campaigns = campaignPerformance(leads);
 
@@ -254,48 +274,53 @@ export async function loadMarketingAnalytics(
   ).length;
 
   return {
-    summary: {
-      leads: leads.length,
-      mql: counts.mql,
-      sal: counts.sal,
-      sql: counts.sql,
-      oportunidade: counts.oportunidade,
-      leadToSql: percent(counts.sql, leads.length),
-      leadToOpportunity: percent(counts.oportunidade, leads.length),
-      utmCoverage: percent(completeUtms, leads.length),
+    data: {
+      summary: {
+        leads: leads.length,
+        mql: counts.mql,
+        sal: counts.sal,
+        sql: counts.sql,
+        oportunidade: counts.oportunidade,
+        leadToSql: percent(counts.sql, leads.length),
+        leadToOpportunity: percent(counts.oportunidade, leads.length),
+        utmCoverage: percent(completeUtms, leads.length),
+      },
+      funnel: funnelFromCounts(counts, ["mql", "sal", "sql", "oportunidade"]),
+      trend: [...trendMap.values()].sort((a, b) =>
+        String(a.date).localeCompare(String(b.date)),
+      ),
+      campaigns,
+      creatives: [...creativeGroups.entries()]
+        .map(([name, rows]) => {
+          const sql = rows.filter((lead) => reachedStages(lead).has("sql")).length;
+          return { name, leads: rows.length, sql, conversion: percent(sql, rows.length) };
+        })
+        .filter((row) => row.leads >= 3)
+        .sort((a, b) => b.sql - a.sql)
+        .slice(0, 10),
+      sources: [...sourceGroups.entries()]
+        .map(([name, rows]) => ({
+          name,
+          leads: rows.length,
+          sql: rows.filter((lead) => reachedStages(lead).has("sql")).length,
+        }))
+        .sort((a, b) => b.leads - a.leads),
+      coverage: [
+        { name: "UTMs completas", value: completeUtms },
+        { name: "UTMs incompletas", value: leads.length - completeUtms },
+      ],
     },
-    funnel: funnelFromCounts(counts, ["mql", "sal", "sql", "oportunidade"]),
-    trend: [...trendMap.values()].sort((a, b) =>
-      String(a.date).localeCompare(String(b.date)),
-    ),
-    campaigns,
-    creatives: [...creativeGroups.entries()]
-      .map(([name, rows]) => {
-        const sql = rows.filter((lead) => reachedStages(lead).has("sql")).length;
-        return { name, leads: rows.length, sql, conversion: percent(sql, rows.length) };
-      })
-      .filter((row) => row.leads >= 3)
-      .sort((a, b) => b.sql - a.sql)
-      .slice(0, 10),
-    sources: [...sourceGroups.entries()]
-      .map(([name, rows]) => ({
-        name,
-        leads: rows.length,
-        sql: rows.filter((lead) => reachedStages(lead).has("sql")).length,
-      }))
-      .sort((a, b) => b.leads - a.leads),
-    coverage: [
-      { name: "UTMs completas", value: completeUtms },
-      { name: "UTMs incompletas", value: leads.length - completeUtms },
-    ],
+    filterOptions: buildDashboardFilterOptions(leads, filters),
   };
 }
 
 export async function loadCommercialAnalytics(
   tenantId: string,
   filters: DashboardFilters,
-): Promise<CommercialAnalytics> {
-  const { leads } = await loadAnalyticsRows(tenantId, filters);
+): Promise<CommercialAnalyticsBundle> {
+  const { leads } = await loadAnalyticsRows(tenantId, filters, {
+    includeEvents: false,
+  });
   const counts = stageCounts(leads);
   const commercial = leads.filter((lead) =>
     ["sql", "oportunidade", "negociacao", "venda", "perda"].some((stage) =>
@@ -323,39 +348,42 @@ export async function loadCommercialAnalytics(
   }));
 
   return {
-    filteredLeads: leads.length,
-    summary: {
-      sql: counts.sql,
-      oportunidade: counts.oportunidade,
-      negociacao: counts.negociacao,
-      venda: counts.venda,
-      perda: counts.perda,
-      sqlToOpportunity: percent(counts.oportunidade, counts.sql),
-      opportunityToNegotiation: percent(counts.negociacao, counts.oportunidade),
-      negotiationToSale: percent(counts.venda, counts.negociacao),
+    data: {
+      filteredLeads: leads.length,
+      summary: {
+        sql: counts.sql,
+        oportunidade: counts.oportunidade,
+        negociacao: counts.negociacao,
+        venda: counts.venda,
+        perda: counts.perda,
+        sqlToOpportunity: percent(counts.oportunidade, counts.sql),
+        opportunityToNegotiation: percent(counts.negociacao, counts.oportunidade),
+        negotiationToSale: percent(counts.venda, counts.negociacao),
+      },
+      funnel: funnelFromCounts(counts, [
+        "sql",
+        "oportunidade",
+        "negociacao",
+        "venda",
+      ]),
+      campaigns: campaignPerformance(leads),
+      lossReasons: [...reasons.entries()]
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value),
+      aging,
+      recent: commercial
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .slice(0, 20)
+        .map((lead) => ({
+          id: lead.id,
+          kommoLeadId: lead.kommo_lead_id,
+          name: lead.name || `Lead #${lead.kommo_lead_id}`,
+          qualification: lead.qualification,
+          campaign: dimension(lead.utm_campaign, "Sem campanha"),
+          lossReason: lossReason(lead),
+          updatedAt: lead.updated_at,
+        })),
     },
-    funnel: funnelFromCounts(counts, [
-      "sql",
-      "oportunidade",
-      "negociacao",
-      "venda",
-    ]),
-    campaigns: campaignPerformance(leads),
-    lossReasons: [...reasons.entries()]
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value),
-    aging,
-    recent: commercial
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      .slice(0, 20)
-      .map((lead) => ({
-        id: lead.id,
-        kommoLeadId: lead.kommo_lead_id,
-        name: lead.name || `Lead #${lead.kommo_lead_id}`,
-        qualification: lead.qualification,
-        campaign: dimension(lead.utm_campaign, "Sem campanha"),
-        lossReason: lossReason(lead),
-        updatedAt: lead.updated_at,
-      })),
+    filterOptions: buildDashboardFilterOptions(leads, filters),
   };
 }
