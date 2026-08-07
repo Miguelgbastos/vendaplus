@@ -1,4 +1,6 @@
+import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { dashboardCacheTag } from "@/lib/dashboard-cache";
 import { fetchKommoLead } from "@/lib/kommo/client";
 import {
   completeQualificationMilestones,
@@ -46,6 +48,15 @@ export async function processKommoJob(job: JobRow): Promise<void> {
       (mappings ?? []) as FieldMapping[],
     );
     await upsertNormalizedLead(admin, job.tenant_id, normalized, rawLead);
+  }
+
+  try {
+    // Webhook/worker externo: precisa expirar imediatamente para que o próximo
+    // acesso ao dashboard busque os dados novos, em vez do stale-while-revalidate
+    // do profile "max" (que ainda serviria a agregação anterior à sync).
+    revalidateTag(dashboardCacheTag(job.tenant_id), { expire: 0 });
+  } catch {
+    // noop
   }
 
   await markJob(admin, job.id, "completed");

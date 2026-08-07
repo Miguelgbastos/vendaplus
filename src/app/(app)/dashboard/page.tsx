@@ -1,9 +1,14 @@
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { DashboardFiltersBar } from "@/components/dashboards/dashboard-filters";
 import { DashboardChartsFallback } from "@/components/dashboards/dashboard-charts-fallback";
 import { getActiveTenant, requireUser } from "@/lib/auth";
-import { parseDashboardFilters } from "@/lib/dashboard-filters";
+import { loadDashboardFilterOptions } from "@/lib/dashboard-filter-options";
+import {
+  parseDashboardFilters,
+  type DashboardFilters,
+} from "@/lib/dashboard-filters";
 import { loadDashboardMetrics } from "@/lib/metrics";
 
 const MetricsGrid = dynamic(
@@ -15,6 +20,17 @@ const MetricsGrid = dynamic(
 );
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function MetricsSection({
+  tenantId,
+  filters,
+}: {
+  tenantId: string;
+  filters: DashboardFilters;
+}) {
+  const metrics = await loadDashboardMetrics(tenantId, filters);
+  return <MetricsGrid metrics={metrics} empty={metrics.leadsTotal === 0} />;
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -40,7 +56,9 @@ export default async function DashboardPage({
 
   const params = await searchParams;
   const { filters, clamped } = parseDashboardFilters(params);
-  const { metrics, filterOptions } = await loadDashboardMetrics(
+  // Light distinct-values RPC: the filters bar stays in the initial chunk
+  // while the heavy aggregation streams inside Suspense below.
+  const filterOptions = await loadDashboardFilterOptions(
     membership.tenant.id,
     filters,
   );
@@ -60,7 +78,9 @@ export default async function DashboardPage({
         options={filterOptions}
         clamped={clamped}
       />
-      <MetricsGrid metrics={metrics} empty={metrics.leadsTotal === 0} />
+      <Suspense fallback={<DashboardChartsFallback />}>
+        <MetricsSection tenantId={membership.tenant.id} filters={filters} />
+      </Suspense>
     </div>
   );
 }

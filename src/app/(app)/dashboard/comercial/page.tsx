@@ -1,10 +1,15 @@
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { DashboardFiltersBar } from "@/components/dashboards/dashboard-filters";
 import { DashboardChartsFallback } from "@/components/dashboards/dashboard-charts-fallback";
 import { getActiveTenant, requireUser } from "@/lib/auth";
 import { loadCommercialAnalytics } from "@/lib/dashboard-analytics";
-import { parseDashboardFilters } from "@/lib/dashboard-filters";
+import { loadDashboardFilterOptions } from "@/lib/dashboard-filter-options";
+import {
+  parseDashboardFilters,
+  type DashboardFilters,
+} from "@/lib/dashboard-filters";
 
 const CommercialAnalyticsDashboard = dynamic(
   () =>
@@ -15,6 +20,22 @@ const CommercialAnalyticsDashboard = dynamic(
 );
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function CommercialSection({
+  tenantId,
+  filters,
+}: {
+  tenantId: string;
+  filters: DashboardFilters;
+}) {
+  const analytics = await loadCommercialAnalytics(tenantId, filters);
+  return (
+    <CommercialAnalyticsDashboard
+      data={analytics}
+      empty={analytics.filteredLeads === 0}
+    />
+  );
+}
 
 export default async function ComercialDashboardPage({
   searchParams,
@@ -28,7 +49,7 @@ export default async function ComercialDashboardPage({
 
   const params = await searchParams;
   const { filters, clamped } = parseDashboardFilters(params);
-  const { data: analytics, filterOptions } = await loadCommercialAnalytics(
+  const filterOptions = await loadDashboardFilterOptions(
     membership.tenant.id,
     filters,
   );
@@ -49,10 +70,9 @@ export default async function ComercialDashboardPage({
         options={filterOptions}
         clamped={clamped}
       />
-      <CommercialAnalyticsDashboard
-        data={analytics}
-        empty={analytics.filteredLeads === 0}
-      />
+      <Suspense fallback={<DashboardChartsFallback />}>
+        <CommercialSection tenantId={membership.tenant.id} filters={filters} />
+      </Suspense>
     </div>
   );
 }

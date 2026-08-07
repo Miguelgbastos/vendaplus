@@ -1,0 +1,150 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  firstSeenRangeBounds,
+  type DashboardFilters,
+} from "@/lib/dashboard-filters";
+import type {
+  DashboardDimension,
+  DashboardNameValueRow,
+  DashboardRecentLeadRow,
+  DashboardStageCountsRow,
+  DashboardDimensionPerformanceRow,
+  DashboardFilterOptionRow,
+  DashboardTrendRow,
+} from "@/types/database";
+
+/** Shared params for the dashboard aggregate RPCs (São Paulo day bounds + dimension filters). */
+function dashboardRpcParams(tenantId: string, filters: DashboardFilters) {
+  const { gte, lt } = firstSeenRangeBounds(filters.from, filters.to);
+  return {
+    p_tenant_id: tenantId,
+    p_from: gte,
+    p_to: lt,
+    p_campaign: filters.campaign ?? null,
+    p_source: filters.source ?? null,
+    p_medium: filters.medium ?? null,
+    p_owner: filters.owner ?? null,
+    p_stage: filters.stage ?? null,
+  };
+}
+
+async function callRpc<T>(
+  supabase: SupabaseClient,
+  fn: string,
+  params: Record<string, unknown>,
+): Promise<T> {
+  const { data, error } = await supabase.rpc(fn, params);
+  if (error) throw new Error(`${fn}: ${error.message}`);
+  return data as T;
+}
+
+const EMPTY_STAGE_COUNTS: DashboardStageCountsRow = {
+  leads_total: 0,
+  mql: 0,
+  sal: 0,
+  sql: 0,
+  oportunidade: 0,
+  negociacao: 0,
+  venda: 0,
+  perda: 0,
+  receita_fechada: 0,
+  utm_complete: 0,
+};
+
+export async function fetchDashboardStageCounts(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardStageCountsRow> {
+  const rows = await callRpc<DashboardStageCountsRow[]>(
+    supabase,
+    "dashboard_stage_counts",
+    dashboardRpcParams(tenantId, filters),
+  );
+  const row = rows?.[0];
+  if (!row) return EMPTY_STAGE_COUNTS;
+  return {
+    ...row,
+    receita_fechada: Number(row.receita_fechada) || 0,
+  };
+}
+
+export async function fetchDashboardDimensionPerformance(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+  dimension: DashboardDimension,
+  fallback: string,
+): Promise<DashboardDimensionPerformanceRow[]> {
+  return callRpc<DashboardDimensionPerformanceRow[]>(
+    supabase,
+    "dashboard_dimension_performance",
+    {
+      ...dashboardRpcParams(tenantId, filters),
+      p_dimension: dimension,
+      p_fallback: fallback,
+    },
+  );
+}
+
+export async function fetchDashboardFilterOptionRows(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: Pick<DashboardFilters, "from" | "to">,
+): Promise<DashboardFilterOptionRow[]> {
+  const { gte, lt } = firstSeenRangeBounds(filters.from, filters.to);
+  return callRpc<DashboardFilterOptionRow[]>(
+    supabase,
+    "dashboard_filter_options",
+    { p_tenant_id: tenantId, p_from: gte, p_to: lt },
+  );
+}
+
+export async function fetchDashboardTrend(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardTrendRow[]> {
+  return callRpc<DashboardTrendRow[]>(
+    supabase,
+    "dashboard_trend",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardLossReasons(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardNameValueRow[]> {
+  return callRpc<DashboardNameValueRow[]>(
+    supabase,
+    "dashboard_loss_reasons",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardAging(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardNameValueRow[]> {
+  return callRpc<DashboardNameValueRow[]>(
+    supabase,
+    "dashboard_aging",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardRecentLeads(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+  limit = 20,
+): Promise<DashboardRecentLeadRow[]> {
+  return callRpc<DashboardRecentLeadRow[]>(
+    supabase,
+    "dashboard_recent_leads",
+    { ...dashboardRpcParams(tenantId, filters), p_limit: limit },
+  );
+}
