@@ -10,20 +10,36 @@ type JobRow = {
   max_attempts: number;
 };
 
+const QUALIFICATIONS = new Set<QualificationStage>([
+  "mql",
+  "sal",
+  "sql",
+  "oportunidade",
+  "negociacao",
+  "venda",
+  "perda",
+]);
+
 /**
  * Processa um job `send_meta_capi_event`: carrega o lead + contato do banco,
  * monta o payload CAPI (com hashes) e envia via `dispatchQualificationEvent`.
- * Falhas transitórias (HTTP 5xx / rede) resultam em throw para o retry padrão.
+ * Falhas transitórias (HTTP 5xx / 429 / rede) resultam em throw para o retry.
  */
 export async function processMetaCapiJob(job: JobRow): Promise<void> {
   const admin = createAdminClient();
   const leadId = typeof job.payload.lead_id === "string" ? job.payload.lead_id : null;
+  const qualificationRaw =
+    typeof job.payload.qualification === "string" ? job.payload.qualification : null;
   const qualification =
-    typeof job.payload.qualification === "string"
-      ? (job.payload.qualification as QualificationStage)
+    qualificationRaw && QUALIFICATIONS.has(qualificationRaw as QualificationStage)
+      ? (qualificationRaw as QualificationStage)
       : null;
   const occurredAt =
     typeof job.payload.occurred_at === "string" ? job.payload.occurred_at : null;
+  const eventId =
+    typeof job.payload.event_id === "string" && job.payload.event_id.trim()
+      ? job.payload.event_id.trim()
+      : `job-${job.id}`;
 
   if (!leadId || !qualification) {
     await markJob(admin, job.id, "completed");
@@ -39,7 +55,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     .eq("tenant_id", job.tenant_id)
     .maybeSingle();
 
-  if (leadError) throw new Error(leadError.message);
+  if (leadError) throw new Error(`meta_capi_lead_lookup_failed:${leadError.message}`);
   if (!lead) {
     await markJob(admin, job.id, "completed");
     return;
@@ -53,12 +69,15 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
   } | null = null;
 
   if (lead.contact_id) {
-    const { data } = await admin
+    const { data, error: contactError } = await admin
       .from("contacts")
       .select("kommo_contact_id, name, email, phone")
       .eq("id", lead.contact_id)
       .eq("tenant_id", job.tenant_id)
       .maybeSingle();
+    if (contactError) {
+      throw new Error(`meta_capi_contact_lookup_failed:${contactError.message}`);
+    }
     contact = data ?? null;
   }
 
@@ -66,6 +85,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     tenantId: job.tenant_id,
     leadId: lead.id,
     qualification,
+    eventId,
     occurredAt,
     value: lead.price != null ? Number(lead.price) : null,
     currency: "BRL",
@@ -76,7 +96,6 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
       external_id: contact?.kommo_contact_id ?? lead.contact_id ?? null,
     },
     custom: {
-      content_name: lead.name ?? undefined,
       utm_source: lead.utm_source ?? undefined,
       utm_medium: lead.utm_medium ?? undefined,
       utm_campaign: lead.utm_campaign ?? undefined,
@@ -86,13 +105,9 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
   });
 
   if (!outcome.skipped && !outcome.result.ok) {
-    // Erros 5xx / rede devem tentar de novo. 4xx (config/permissão) marcam falhado
-    // sem retries úteis; deixamos o retry padrão decidir, mas registramos o erro.
     const status = outcome.result.httpStatus;
     if (status === 0 || status >= 500 || status === 429) {
-      throw new Error(
-        outcome.result.errorMessage || `meta_capi_http_${status}`,
-      );
+      throw new Error(outcome.result.errorMessage || `meta_capi_http_${status}`);
     }
   }
 
@@ -104,7 +119,7 @@ async function markJob(
   jobId: string,
   status: "completed",
 ) {
-  await admin
+  const { error } = await admin
     .from("jobs")
     .update({
       status,
@@ -115,4 +130,8 @@ async function markJob(
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+
+  if (error) {
+    throw new Error(`meta_capi_job_complete_failed:${error.message}`);
+  }
 }

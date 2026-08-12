@@ -6,7 +6,7 @@ describe("buildMetaCapiEvent", () => {
   it("hashes PII, drops empty fields and converts time to seconds", () => {
     const event = buildMetaCapiEvent({
       eventName: "Purchase",
-      eventTimeMs: 1_780_000_000_000, // fixed
+      eventTimeMs: 1_780_000_000_000,
       actionSource: "system_generated",
       user: {
         email: "  Test@Example.COM ",
@@ -69,6 +69,17 @@ describe("buildMetaCapiEvent", () => {
       (withDerived.user_data.ln as string[])[0],
       (withExplicit.user_data.ln as string[])[0],
     );
+  });
+
+  it("preserves an explicit event_id for retry deduplication", () => {
+    const event = buildMetaCapiEvent({
+      eventName: "Lead",
+      eventTimeMs: 1000,
+      eventId: "job-stable-event-id",
+      user: { external_id: "contact-1" },
+    });
+
+    assert.equal(event.event_id, "job-stable-event-id");
   });
 });
 

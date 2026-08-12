@@ -19,19 +19,30 @@ const mappingSchema = z.object({
   qualification: z.enum(QUALIFICATIONS),
   event_name: z.string().trim().min(1).max(120),
   include_value: z.boolean(),
-  currency: z.string().trim().min(3).max(6).default("BRL"),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/).default("BRL"),
   is_active: z.boolean(),
-  action_source: z.string().trim().max(80).default("system_generated"),
+  action_source: z.string().trim().min(1).max(80).default("system_generated"),
 });
+
+const completeMappingsSchema = z
+  .array(mappingSchema)
+  .length(QUALIFICATIONS.length)
+  .refine(
+    (mappings) =>
+      new Set(mappings.map((mapping) => mapping.qualification)).size ===
+      QUALIFICATIONS.length,
+    { message: "Informe exatamente um mapeamento para cada qualificação." },
+  );
 
 const bodySchema = z.object({
   tenant_id: z.string().uuid(),
-  mappings: z.array(mappingSchema).min(1).max(20),
+  mappings: completeMappingsSchema,
 });
 
 /**
- * Substitui completamente o conjunto de mapeamentos evento⇄qualificação para
- * o tenant. Operação atômica dentro do batch (delete + upsert por qualificação).
+ * Substitui logicamente o conjunto completo de mappings do tenant. Como a API
+ * exige exatamente os sete estágios, o upsert em uma única instrução atualiza
+ * todos os valores sem deixar configurações antigas fora do batch.
  */
 export async function PUT(request: Request) {
   try {
@@ -64,7 +75,7 @@ export async function PUT(request: Request) {
     const rows = mappings.map((m) => ({
       tenant_id: tenantId,
       qualification: m.qualification,
-      event_name: m.event_name.slice(0, 120),
+      event_name: m.event_name,
       include_value: m.include_value,
       currency: m.currency.toUpperCase(),
       is_active: m.is_active,

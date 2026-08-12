@@ -1,7 +1,7 @@
 import type { MetaCapiEvent } from "@/lib/meta-capi/event";
 
-/** Meta Graph API — versão que a Conversions API aceita atualmente. */
-const META_GRAPH_API_VERSION = "v20.0";
+const DEFAULT_META_GRAPH_API_VERSION = "v20.0";
+const META_CAPI_TIMEOUT_MS = 10_000;
 
 export type SendCapiEventsInput = {
   pixelId: string;
@@ -19,15 +19,24 @@ export type SendCapiEventsResult = {
   errorMessage: string | null;
 };
 
+function resolveGraphApiVersion(): string {
+  const configured = process.env.META_GRAPH_API_VERSION?.trim();
+  return configured && /^v\d+\.\d+$/.test(configured)
+    ? configured
+    : DEFAULT_META_GRAPH_API_VERSION;
+}
+
 /**
- * Envia um lote de eventos CAPI para o Pixel do tenant e devolve um resumo.
- * Nunca lança em rota de produção: consumidores usam `ok` + `errorMessage`.
+ * Envia um lote de eventos CAPI para o Pixel da empresa e devolve um resumo.
+ * A versão da Graph API pode ser atualizada por META_GRAPH_API_VERSION sem
+ * alteração de código. Chamadas externas expiram em 10 segundos.
  */
 export async function sendCapiEvents(
   input: SendCapiEventsInput,
   fetchImpl: typeof fetch = fetch,
 ): Promise<SendCapiEventsResult> {
-  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${encodeURIComponent(
+  const version = resolveGraphApiVersion();
+  const url = `https://graph.facebook.com/${version}/${encodeURIComponent(
     input.pixelId,
   )}/events`;
 
@@ -45,6 +54,7 @@ export async function sendCapiEvents(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(META_CAPI_TIMEOUT_MS),
     });
   } catch (error) {
     return {
@@ -53,8 +63,7 @@ export async function sendCapiEvents(
       fbtraceId: null,
       eventsReceived: null,
       responseBody: null,
-      errorMessage:
-        error instanceof Error ? error.message : "network_error",
+      errorMessage: error instanceof Error ? error.message : "network_error",
     };
   }
 
@@ -80,9 +89,7 @@ export async function sendCapiEvents(
         ? record.fbtrace_id
         : errorObj?.fbtrace_id ?? null,
     eventsReceived:
-      typeof record.events_received === "number"
-        ? record.events_received
-        : null,
+      typeof record.events_received === "number" ? record.events_received : null,
     responseBody: json,
     errorMessage:
       errorObj?.message ??

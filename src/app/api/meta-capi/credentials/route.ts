@@ -2,9 +2,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
+import { DEFAULT_QUALIFICATION_EVENT_MAP } from "@/lib/meta-capi/event";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { QualificationStage } from "@/types/database";
 
 export const runtime = "nodejs";
+
+const QUALIFICATIONS: QualificationStage[] = [
+  "mql",
+  "sal",
+  "sql",
+  "oportunidade",
+  "negociacao",
+  "venda",
+  "perda",
+];
 
 const bodySchema = z.object({
   tenant_id: z.string().uuid(),
@@ -65,11 +77,15 @@ export async function POST(request: Request) {
 
     const accessTokenInput = parsed.data.access_token?.trim() || "";
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingError } = await admin
       .from("meta_capi_connections")
       .select("id, tenant_id, access_token_encrypted, status")
       .eq("tenant_id", tenantId)
       .maybeSingle();
+
+    if (existingError) {
+      throw new Error(`meta_capi_connection_lookup_failed:${existingError.message}`);
+    }
 
     let accessTokenEncrypted: string | null = null;
     if (accessTokenInput) {
@@ -108,11 +124,29 @@ export async function POST(request: Request) {
       .upsert(payload, { onConflict: "tenant_id" });
 
     if (upsertError) {
-      console.error("meta capi credentials upsert failed");
-      return NextResponse.json(
-        { error: "Falha ao salvar configuração." },
-        { status: 500 },
-      );
+      throw new Error(`meta_capi_credentials_upsert_failed:${upsertError.message}`);
+    }
+
+    const defaultMappings = QUALIFICATIONS.map((qualification) => ({
+      tenant_id: tenantId,
+      qualification,
+      event_name: DEFAULT_QUALIFICATION_EVENT_MAP[qualification] ?? "Lead",
+      include_value: qualification === "venda" || qualification === "negociacao",
+      currency: "BRL",
+      is_active: qualification !== "perda",
+      action_source: "system_generated",
+      updated_at: now,
+    }));
+
+    const { error: mappingsError } = await admin
+      .from("meta_capi_event_mappings")
+      .upsert(defaultMappings, {
+        onConflict: "tenant_id,qualification",
+        ignoreDuplicates: true,
+      });
+
+    if (mappingsError) {
+      throw new Error(`meta_capi_default_mappings_failed:${mappingsError.message}`);
     }
 
     return NextResponse.json({
@@ -164,7 +198,7 @@ export async function DELETE(request: Request) {
     }
 
     const admin = createAdminClient();
-    await admin
+    const { error: disableError } = await admin
       .from("meta_capi_connections")
       .update({
         access_token_encrypted: null,
@@ -173,6 +207,10 @@ export async function DELETE(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("tenant_id", parsed.data.tenant_id);
+
+    if (disableError) {
+      throw new Error(`meta_capi_disconnect_failed:${disableError.message}`);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

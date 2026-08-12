@@ -17,7 +17,6 @@ type CapiConnectionRow = {
   access_token_encrypted: string | null;
   test_event_code: string | null;
   is_enabled: boolean;
-  status: string;
 };
 
 type EventMappingRow = {
@@ -33,6 +32,7 @@ export type DispatchQualificationInput = {
   tenantId: string;
   leadId: string;
   qualification: QualificationStage;
+  eventId: string;
   occurredAt?: string | null;
   value?: number | null;
   currency?: string | null;
@@ -41,11 +41,21 @@ export type DispatchQualificationInput = {
   custom?: BuildEventInput["custom"];
 };
 
+type CapiConnectionContext = {
+  enabled: boolean;
+  reason: "disabled" | "not_configured" | "ok";
+  pixelId: string | null;
+  accessToken: string | null;
+  testEventCode: string | null;
+};
+
+type TenantCapiContext = CapiConnectionContext & {
+  mappings: Map<QualificationStage, EventMappingRow>;
+};
+
 /**
  * Envia (ou marca como skip) um evento CAPI para uma transição de qualificação.
- * Persiste sempre um registro em `meta_capi_events` — inclusive quando pulamos
- * (status=failed com error `disabled|not_configured|no_mapping`) — para dar
- * visibilidade ao owner/admin.
+ * O event_id vem do job e é preservado em todos os retries para deduplicação.
  */
 export async function dispatchQualificationEvent(
   input: DispatchQualificationInput,
@@ -59,7 +69,7 @@ export async function dispatchQualificationEvent(
     await logSkip(
       admin,
       input,
-      context.mappingEventName ?? DEFAULT_QUALIFICATION_EVENT_MAP[input.qualification],
+      DEFAULT_QUALIFICATION_EVENT_MAP[input.qualification] ?? "Lead",
       context.reason,
     );
     return { skipped: true, reason: context.reason };
@@ -76,7 +86,6 @@ export async function dispatchQualificationEvent(
     return { skipped: true, reason: "no_mapping" };
   }
 
-  const eventId = generateEventId();
   const eventTimeMs = input.occurredAt
     ? Date.parse(input.occurredAt) || Date.now()
     : Date.now();
@@ -85,7 +94,7 @@ export async function dispatchQualificationEvent(
     eventName: mapping.event_name,
     eventTimeMs,
     actionSource: mapping.action_source || "system_generated",
-    eventId,
+    eventId: input.eventId,
     eventSourceUrl: input.eventSourceUrl,
     user: input.user,
     custom: {
@@ -105,8 +114,8 @@ export async function dispatchQualificationEvent(
 }
 
 /**
- * Envia um evento de teste (Lead) para validar a configuração do tenant.
- * Retorna diretamente o resultado da Graph API.
+ * Envia um evento de teste (Lead) para validar a configuração da empresa.
+ * Somente este fluxo inclui test_event_code na chamada à Meta.
  */
 export async function sendTestCapiEvent(params: {
   tenantId: string;
@@ -114,7 +123,7 @@ export async function sendTestCapiEvent(params: {
   testEventCode?: string | null;
 }): Promise<SendCapiEventsResult & { eventId: string }> {
   const admin = createAdminClient();
-  const context = await loadTenantCapiContext(admin, params.tenantId);
+  const context = await loadCapiConnection(admin, params.tenantId);
   if (!context.pixelId || !context.accessToken) {
     return {
       ok: false,
@@ -155,43 +164,18 @@ export async function sendTestCapiEvent(params: {
   return { ...result, eventId };
 }
 
-// ---------------------------------------------------------------------------
-// internals
-// ---------------------------------------------------------------------------
-
-type TenantCapiContext = {
-  enabled: boolean;
-  reason: "disabled" | "not_configured" | "ok";
-  pixelId: string | null;
-  accessToken: string | null;
-  testEventCode: string | null;
-  status: string;
-  mappings: Map<QualificationStage, EventMappingRow>;
-  mappingEventName: string | null;
-};
-
-async function loadTenantCapiContext(
+async function loadCapiConnection(
   admin: Admin,
   tenantId: string,
-): Promise<TenantCapiContext> {
-  const { data: connection } = await admin
+): Promise<CapiConnectionContext> {
+  const { data: connection, error: connectionError } = await admin
     .from("meta_capi_connections")
-    .select(
-      "pixel_id, access_token_encrypted, test_event_code, is_enabled, status",
-    )
+    .select("pixel_id, access_token_encrypted, test_event_code, is_enabled")
     .eq("tenant_id", tenantId)
     .maybeSingle<CapiConnectionRow>();
 
-  const { data: mappingsData } = await admin
-    .from("meta_capi_event_mappings")
-    .select(
-      "qualification, event_name, include_value, currency, is_active, action_source",
-    )
-    .eq("tenant_id", tenantId);
-
-  const mappings = new Map<QualificationStage, EventMappingRow>();
-  for (const row of (mappingsData ?? []) as EventMappingRow[]) {
-    mappings.set(row.qualification, row);
+  if (connectionError) {
+    throw new Error(`meta_capi_connection_lookup_failed:${connectionError.message}`);
   }
 
   if (!connection || !connection.pixel_id || !connection.access_token_encrypted) {
@@ -201,9 +185,6 @@ async function loadTenantCapiContext(
       pixelId: connection?.pixel_id ?? null,
       accessToken: null,
       testEventCode: connection?.test_event_code ?? null,
-      status: connection?.status ?? "pending",
-      mappings,
-      mappingEventName: null,
     };
   }
 
@@ -217,9 +198,6 @@ async function loadTenantCapiContext(
       pixelId: connection.pixel_id,
       accessToken: null,
       testEventCode: connection.test_event_code,
-      status: connection.status,
-      mappings,
-      mappingEventName: null,
     };
   }
 
@@ -229,10 +207,35 @@ async function loadTenantCapiContext(
     pixelId: connection.pixel_id,
     accessToken,
     testEventCode: connection.test_event_code,
-    status: connection.status,
-    mappings,
-    mappingEventName: null,
   };
+}
+
+async function loadTenantCapiContext(
+  admin: Admin,
+  tenantId: string,
+): Promise<TenantCapiContext> {
+  const connection = await loadCapiConnection(admin, tenantId);
+  if (!connection.enabled) {
+    return { ...connection, mappings: new Map() };
+  }
+
+  const { data: mappingsData, error: mappingsError } = await admin
+    .from("meta_capi_event_mappings")
+    .select(
+      "qualification, event_name, include_value, currency, is_active, action_source",
+    )
+    .eq("tenant_id", tenantId);
+
+  if (mappingsError) {
+    throw new Error(`meta_capi_mappings_lookup_failed:${mappingsError.message}`);
+  }
+
+  const mappings = new Map<QualificationStage, EventMappingRow>();
+  for (const row of (mappingsData ?? []) as EventMappingRow[]) {
+    mappings.set(row.qualification, row);
+  }
+
+  return { ...connection, mappings };
 }
 
 async function runAndLog(
@@ -251,22 +254,24 @@ async function runAndLog(
     event_id: eventId,
     status: "received" as const,
     request_payload: sanitizeEventForLog(event),
-    test_event_code: context.testEventCode,
   };
 
-  await admin
+  const { error: logInsertError } = await admin
     .from("meta_capi_events")
     .upsert(insertPayload, { onConflict: "tenant_id,event_id" });
+
+  if (logInsertError) {
+    throw new Error(`meta_capi_log_upsert_failed:${logInsertError.message}`);
+  }
 
   const result = await sendCapiEvents({
     pixelId: context.pixelId!,
     accessToken: context.accessToken!,
     events: [event],
-    testEventCode: context.testEventCode,
   });
 
   const nowIso = new Date().toISOString();
-  await admin
+  const { error: logUpdateError } = await admin
     .from("meta_capi_events")
     .update({
       status: result.ok ? "sent" : "failed",
@@ -279,24 +284,29 @@ async function runAndLog(
     .eq("tenant_id", input.tenantId)
     .eq("event_id", eventId);
 
-  if (result.ok) {
-    await admin
-      .from("meta_capi_connections")
-      .update({
-        status: "connected",
+  if (logUpdateError) {
+    throw new Error(`meta_capi_log_update_failed:${logUpdateError.message}`);
+  }
+
+  const connectionPatch = result.ok
+    ? {
+        status: "connected" as const,
         last_error: null,
         last_sent_at: nowIso,
         connected_at: nowIso,
-      })
-      .eq("tenant_id", input.tenantId);
-  } else {
-    await admin
-      .from("meta_capi_connections")
-      .update({
-        status: "error",
+      }
+    : {
+        status: "error" as const,
         last_error: result.errorMessage,
-      })
-      .eq("tenant_id", input.tenantId);
+      };
+
+  const { error: connectionUpdateError } = await admin
+    .from("meta_capi_connections")
+    .update(connectionPatch)
+    .eq("tenant_id", input.tenantId);
+
+  if (connectionUpdateError) {
+    throw new Error(`meta_capi_connection_update_failed:${connectionUpdateError.message}`);
   }
 
   return { skipped: false, result, eventId };
@@ -308,28 +318,41 @@ async function logSkip(
   eventName: string,
   reason: string,
 ): Promise<void> {
-  const eventId = generateEventId();
-  await admin.from("meta_capi_events").insert({
-    tenant_id: input.tenantId,
-    lead_id: input.leadId,
-    qualification: input.qualification,
-    event_name: eventName,
-    event_id: eventId,
-    status: "failed",
-    error_message: `skipped_${reason}`,
-    request_payload: { skipped: true, reason },
-  });
+  const { error } = await admin.from("meta_capi_events").upsert(
+    {
+      tenant_id: input.tenantId,
+      lead_id: input.leadId,
+      qualification: input.qualification,
+      event_name: eventName,
+      event_id: input.eventId,
+      status: "failed",
+      error_message: `skipped_${reason}`,
+      request_payload: { skipped: true, reason },
+    },
+    { onConflict: "tenant_id,event_id" },
+  );
+
+  if (error) {
+    throw new Error(`meta_capi_skip_log_failed:${error.message}`);
+  }
 }
 
 /**
- * Nunca escrevemos access_token/PII em claro no log. Só o payload já hasheado
- * é persistido — mas removemos IP/user-agent do request_payload arquivado
- * para reduzir superfície em caso de exposição do banco.
+ * O user_data persistido já contém hashes. Como defesa adicional, removemos do
+ * log campos que podem transportar PII em claro quando algum caller os informar.
  */
 function sanitizeEventForLog(event: MetaCapiEvent): Record<string, unknown> {
   const cloned: MetaCapiEvent = JSON.parse(JSON.stringify(event));
   const ud = cloned.user_data as Record<string, unknown>;
   delete ud.client_ip_address;
   delete ud.client_user_agent;
+  delete cloned.event_source_url;
+
+  if (cloned.custom_data) {
+    const customData = { ...cloned.custom_data };
+    delete customData.content_name;
+    cloned.custom_data = customData;
+  }
+
   return cloned as unknown as Record<string, unknown>;
 }

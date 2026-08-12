@@ -43,18 +43,21 @@
 
 - `meta_capi_connections`: Pixel ID, Access Token de System User (AES-256-GCM
   via `TOKEN_ENCRYPTION_KEY`) e Test Event Code por `tenant_id`. Colunas
-  sensíveis (access_token_encrypted) só via `service_role`.
+  sensíveis (`access_token_encrypted`) só via `service_role`.
 - `meta_capi_event_mappings`: mapa `qualification → event_name` (Lead,
   Purchase, InitiateCheckout, ...). Owner/admin edita nomes, moeda, ativo/inativo
-  e se envia `value` do lead.
-- `meta_capi_events`: log auditável dos envios (event_id, HTTP status, fbtrace_id,
-  payload sem PII em claro — apenas hashes SHA-256).
-- Envio assíncrono: `processKommoJob` enfileira `send_meta_capi_event` a cada
-  transição de qualificação. O worker existente processa ambos os `job_type`s
-  e faz retry exponencial em 5xx/429.
-- `src/lib/meta-capi/` isola hashing (email/phone/nome/external_id), builder do
-  evento CAPI, client da Graph API (`v20.0/{pixel_id}/events`) e o dispatcher
-  que grava o log.
+  e se envia `value` do lead. Os defaults são persistidos na primeira configuração.
+- `meta_capi_events`: log auditável dos envios (`event_id`, HTTP status,
+  `fbtrace_id`). PII de `user_data` é enviada hasheada em SHA-256; o log também
+  remove IP, user-agent, URL de origem e `content_name` por defesa em profundidade.
+- Envio assíncrono: o sistema só cria `send_meta_capi_event` quando a conexão e o
+  mapping da qualificação estão ativos. O `event_id` nasce no enqueue e permanece
+  estável em retries, permitindo deduplicação no destino. Jobs CAPI usam prioridade
+  menor que o processamento Kommo e retry exponencial em 5xx/429/rede.
+- `test_event_code` é exclusivo do fluxo manual de teste e nunca acompanha os
+  eventos automáticos de produção.
+- O client da Graph API possui timeout de 10 segundos. A versão padrão permanece
+  `v20.0` por compatibilidade e pode ser atualizada via `META_GRAPH_API_VERSION`.
 
 ## Estratégia de terminologia
 
