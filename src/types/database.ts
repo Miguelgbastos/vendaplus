@@ -80,6 +80,24 @@ export type DashboardStageCountsRow = {
   utm_complete: number;
 };
 
+/** Closed-in-period vs created-and-closed-in-period outcome counts. */
+export type DashboardCommercialOutcomesRow = {
+  venda_fechada: number;
+  perda_fechada: number;
+  venda_mesmo_periodo: number;
+  perda_mesmo_periodo: number;
+};
+
+/** Per-stage dwell (open leads stuck now) and cycle time (completed stays). */
+export type DashboardStageDwellRow = {
+  stage: QualificationStage;
+  open_leads: number;
+  median_current_days: number | string | null;
+  stuck_7d: number;
+  completed_stays: number;
+  median_cycle_days: number | string | null;
+};
+
 export type DashboardDimension = "campaign" | "source" | "medium" | "content";
 
 export type DashboardDimensionPerformanceRow = {

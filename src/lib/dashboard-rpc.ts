@@ -4,10 +4,12 @@ import {
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import type {
+  DashboardCommercialOutcomesRow,
   DashboardDimension,
   DashboardNameValueRow,
   DashboardRecentLeadRow,
   DashboardStageCountsRow,
+  DashboardStageDwellRow,
   DashboardDimensionPerformanceRow,
   DashboardFilterOptionRow,
   DashboardTrendRow,
@@ -67,6 +69,26 @@ export async function fetchDashboardStageCounts(
     ...row,
     receita_fechada: Number(row.receita_fechada) || 0,
   };
+}
+
+const EMPTY_COMMERCIAL_OUTCOMES: DashboardCommercialOutcomesRow = {
+  venda_fechada: 0,
+  perda_fechada: 0,
+  venda_mesmo_periodo: 0,
+  perda_mesmo_periodo: 0,
+};
+
+export async function fetchDashboardCommercialOutcomes(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardCommercialOutcomesRow> {
+  const rows = await callRpc<DashboardCommercialOutcomesRow[]>(
+    supabase,
+    "dashboard_commercial_outcomes",
+    dashboardRpcParams(tenantId, filters),
+  );
+  return rows?.[0] ?? EMPTY_COMMERCIAL_OUTCOMES;
 }
 
 export async function fetchDashboardDimensionPerformance(
@@ -132,6 +154,18 @@ export async function fetchDashboardAging(
   return callRpc<DashboardNameValueRow[]>(
     supabase,
     "dashboard_aging",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardStageDwell(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardStageDwellRow[]> {
+  return callRpc<DashboardStageDwellRow[]>(
+    supabase,
+    "dashboard_stage_dwell",
     dashboardRpcParams(tenantId, filters),
   );
 }

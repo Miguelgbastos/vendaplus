@@ -31,6 +31,18 @@ const UTM_KEYS = [
   "utm_term",
 ] as const;
 
+/** Canonical marketing origin for Meta / Facebook Ads traffic. */
+export const CANONICAL_META_ADS_SOURCE = "Meta ADS";
+
+/** Case/format-insensitive aliases that collapse into CANONICAL_META_ADS_SOURCE. */
+const META_ADS_SOURCE_ALIASES = new Set([
+  "meta",
+  "meta_ads",
+  "metaads",
+  "meta_ad",
+  "metaad",
+]);
+
 export const QUALIFICATION_MILESTONES: QualificationStage[] = [
   "mql",
   "sal",
@@ -49,6 +61,10 @@ export type NormalizedLead = {
   statusName: string | null;
   price: number | null;
   responsibleUserId: string | null;
+  /** ISO timestamp from Kommo `created_at` (unix seconds). */
+  createdAt: string | null;
+  /** ISO timestamp from Kommo `closed_at` (unix seconds), when closed. */
+  closedAt: string | null;
   qualification: QualificationStage | null;
   utm_source: string | null;
   utm_medium: string | null;
@@ -81,6 +97,21 @@ function num(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Kommo entity timestamps are unix seconds (sometimes sent as numeric strings). */
+export function kommoUnixToIso(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value.trim())
+        ? Number(value.trim())
+        : NaN;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const ms = n < 1e12 ? n * 1000 : n;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function normalizeKey(input: string): string {
@@ -201,6 +232,16 @@ function applyMappings(
   return result;
 }
 
+export function normalizeUtmSource(value: unknown): string | null {
+  const raw = str(value);
+  if (!raw) return null;
+  const key = normalizeKey(raw);
+  if (META_ADS_SOURCE_ALIASES.has(key)) {
+    return CANONICAL_META_ADS_SOURCE;
+  }
+  return raw;
+}
+
 function pickUtm(bag: Record<string, unknown>) {
   const utm: Record<(typeof UTM_KEYS)[number], string | null> = {
     utm_source: null,
@@ -216,6 +257,7 @@ function pickUtm(bag: Record<string, unknown>) {
       str(bag[normalizeKey(key)]) ||
       null;
   }
+  utm.utm_source = normalizeUtmSource(utm.utm_source);
   return utm;
 }
 
@@ -284,6 +326,8 @@ export function normalizeKommoLead(
     statusName: str(lead.status_name) || str(mapped.status_name),
     price: num(mapped.price) ?? num(lead.price),
     responsibleUserId: str(lead.responsible_user_id),
+    createdAt: kommoUnixToIso(lead.created_at),
+    closedAt: kommoUnixToIso(lead.closed_at),
     qualification,
     ...utm,
     customFields: custom,

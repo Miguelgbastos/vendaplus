@@ -4,11 +4,12 @@ import {
 } from "@/lib/dashboard-cache";
 import { type DashboardFilters } from "@/lib/dashboard-filters";
 import {
-  fetchDashboardAging,
+  fetchDashboardCommercialOutcomes,
   fetchDashboardDimensionPerformance,
   fetchDashboardLossReasons,
   fetchDashboardRecentLeads,
   fetchDashboardStageCounts,
+  fetchDashboardStageDwell,
   fetchDashboardTrend,
 } from "@/lib/dashboard-rpc";
 import type {
@@ -64,6 +65,14 @@ export type CommercialAnalytics = {
     negociacao: number;
     venda: number;
     perda: number;
+    /** Closed as won within the selected period (by Kommo closed_at). */
+    vendaFechada: number;
+    /** Closed as lost within the selected period (by Kommo closed_at). */
+    perdaFechada: number;
+    /** Created and closed as won within the same selected period. */
+    vendaMesmoPeriodo: number;
+    /** Created and closed as lost within the same selected period. */
+    perdaMesmoPeriodo: number;
     sqlToOpportunity: number;
     opportunityToNegotiation: number;
     negotiationToSale: number;
@@ -71,7 +80,14 @@ export type CommercialAnalytics = {
   funnel: FunnelPoint[];
   campaigns: CampaignPoint[];
   lossReasons: Array<{ name: string; value: number }>;
-  aging: Array<{ name: string; value: number }>;
+  stageDwell: Array<{
+    stage: string;
+    openLeads: number;
+    medianCurrentDays: number | null;
+    stuck7d: number;
+    completedStays: number;
+    medianCycleDays: number | null;
+  }>;
   recent: Array<{
     id: string;
     kommoLeadId: string | null;
@@ -225,9 +241,10 @@ async function loadCommercialAnalyticsUncached(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<CommercialAnalytics> {
-  const [counts, campaignRows, lossReasons, aging, recentRows] =
+  const [counts, outcomes, campaignRows, lossReasons, dwellRows, recentRows] =
     await Promise.all([
       fetchDashboardStageCounts(supabase, tenantId, filters),
+      fetchDashboardCommercialOutcomes(supabase, tenantId, filters),
       fetchDashboardDimensionPerformance(
         supabase,
         tenantId,
@@ -236,7 +253,7 @@ async function loadCommercialAnalyticsUncached(
         "Sem campanha",
       ),
       fetchDashboardLossReasons(supabase, tenantId, filters),
-      fetchDashboardAging(supabase, tenantId, filters),
+      fetchDashboardStageDwell(supabase, tenantId, filters),
       fetchDashboardRecentLeads(supabase, tenantId, filters, 20),
     ]);
 
@@ -248,6 +265,10 @@ async function loadCommercialAnalyticsUncached(
       negociacao: counts.negociacao,
       venda: counts.venda,
       perda: counts.perda,
+      vendaFechada: outcomes.venda_fechada,
+      perdaFechada: outcomes.perda_fechada,
+      vendaMesmoPeriodo: outcomes.venda_mesmo_periodo,
+      perdaMesmoPeriodo: outcomes.perda_mesmo_periodo,
       sqlToOpportunity: percent(counts.oportunidade, counts.sql),
       opportunityToNegotiation: percent(counts.negociacao, counts.oportunidade),
       negotiationToSale: percent(counts.venda, counts.negociacao),
@@ -260,7 +281,16 @@ async function loadCommercialAnalyticsUncached(
     ]),
     campaigns: toCampaignPoints(campaignRows),
     lossReasons,
-    aging,
+    stageDwell: dwellRows.map((row) => ({
+      stage: row.stage,
+      openLeads: row.open_leads,
+      medianCurrentDays:
+        row.median_current_days == null ? null : Number(row.median_current_days),
+      stuck7d: row.stuck_7d,
+      completedStays: row.completed_stays,
+      medianCycleDays:
+        row.median_cycle_days == null ? null : Number(row.median_cycle_days),
+    })),
     recent: recentRows.map((lead) => ({
       id: lead.id,
       kommoLeadId: lead.kommo_lead_id,

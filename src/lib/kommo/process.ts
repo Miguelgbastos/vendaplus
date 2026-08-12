@@ -155,12 +155,15 @@ async function upsertNormalizedLead(
     status_id: string | null;
     status_name: string | null;
     custom_fields: Record<string, unknown>;
+    closed_at: string | null;
   } | null = null;
 
   if (normalized.kommoLeadId) {
     const { data } = await admin
       .from("leads")
-      .select("id, qualification, pipeline_id, status_id, status_name, custom_fields")
+      .select(
+        "id, qualification, pipeline_id, status_id, status_name, custom_fields, closed_at",
+      )
       .eq("tenant_id", tenantId)
       .eq("kommo_lead_id", normalized.kommoLeadId)
       .maybeSingle();
@@ -174,6 +177,19 @@ async function upsertNormalizedLead(
     },
     normalized.qualification,
   );
+
+  // Align dashboard date filters with Kommo "created at": prefer Kommo
+  // created_at. Only fall back to "now" on first insert when missing.
+  const firstSeenAt =
+    normalized.createdAt ??
+    (previous ? undefined : new Date().toISOString());
+
+  const isClosed =
+    normalized.qualification === "venda" ||
+    normalized.qualification === "perda";
+  const closedAt = isClosed
+    ? normalized.closedAt ?? previous?.closed_at ?? new Date().toISOString()
+    : null;
 
   const leadPayload = {
     tenant_id: tenantId,
@@ -193,12 +209,10 @@ async function upsertNormalizedLead(
     utm_term: normalized.utm_term,
     custom_fields: completedCustomFields,
     raw: rawLead,
+    ...(firstSeenAt ? { first_seen_at: firstSeenAt } : {}),
     last_seen_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    closed_at:
-      normalized.qualification === "venda" || normalized.qualification === "perda"
-        ? new Date().toISOString()
-        : null,
+    closed_at: closedAt,
   };
 
   if (!normalized.kommoLeadId) {
