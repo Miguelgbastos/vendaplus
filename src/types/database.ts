@@ -80,6 +80,14 @@ export type DashboardStageCountsRow = {
   utm_complete: number;
 };
 
+/** Closed-in-period vs created-and-closed-in-period outcome counts. */
+export type DashboardCommercialOutcomesRow = {
+  venda_fechada: number;
+  perda_fechada: number;
+  venda_mesmo_periodo: number;
+  perda_mesmo_periodo: number;
+};
+
 export type DashboardDimension = "campaign" | "source" | "medium" | "content";
 
 export type DashboardDimensionPerformanceRow = {

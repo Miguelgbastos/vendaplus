@@ -77,8 +77,42 @@ export function CommercialAnalyticsDashboard({
         <ChartCard title="Motivos de perda" description="Distribuição do campo personalizado de lista da Kommo">
           {data.lossReasons.length === 0 ? <EmptyChart text="Nenhum motivo de perda foi registrado ainda." /> : <div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.lossReasons.slice(0, 10)} layout="vertical" margin={{ left: 35 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e3dc" /><XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} /><YAxis type="category" dataKey="name" width={140} tickLine={false} axisLine={false} fontSize={11} /><Tooltip /><Bar dataKey="value" name="Perdas" fill={CHART_COLORS.rose} radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div>}
         </ChartCard>
-        <ChartCard title="Resumo de desfechos" description="Vendas e perdas identificadas no funil">
-          <div className="grid h-80 content-center gap-4 sm:grid-cols-2"><div className="rounded-xl border bg-primary-soft/60 p-6"><p className="text-sm text-muted-foreground">Vendas</p><p className="mt-2 font-display text-4xl font-semibold text-primary">{formatNumber(data.summary.venda)}</p></div><div className="rounded-xl border bg-destructive-foreground p-6"><p className="text-sm text-muted-foreground">Perdas</p><p className="mt-2 font-display text-4xl font-semibold text-destructive">{formatNumber(data.summary.perda)}</p></div></div>
+        <ChartCard
+          title="Resumo de desfechos"
+          description="Fechados no período vs criados e fechados no mesmo período"
+        >
+          <div className="grid h-80 content-center gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border bg-primary-soft/60 p-6">
+              <p className="text-sm text-muted-foreground">Vendas</p>
+              <p className="mt-2 font-display text-4xl font-semibold text-primary">
+                {formatNumber(data.summary.vendaFechada)}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fechadas no período
+              </p>
+              <p className="mt-4 text-2xl font-semibold text-primary">
+                {formatNumber(data.summary.vendaMesmoPeriodo)}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Criadas e fechadas no período
+              </p>
+            </div>
+            <div className="rounded-xl border bg-destructive-foreground p-6">
+              <p className="text-sm text-muted-foreground">Perdas</p>
+              <p className="mt-2 font-display text-4xl font-semibold text-destructive">
+                {formatNumber(data.summary.perdaFechada)}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fechadas no período
+              </p>
+              <p className="mt-4 text-2xl font-semibold text-destructive">
+                {formatNumber(data.summary.perdaMesmoPeriodo)}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Criadas e fechadas no período
+              </p>
+            </div>
+          </div>
         </ChartCard>
       </div>
 

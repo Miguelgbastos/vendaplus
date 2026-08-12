@@ -5,6 +5,7 @@ import {
 import { type DashboardFilters } from "@/lib/dashboard-filters";
 import {
   fetchDashboardAging,
+  fetchDashboardCommercialOutcomes,
   fetchDashboardDimensionPerformance,
   fetchDashboardLossReasons,
   fetchDashboardRecentLeads,
@@ -64,6 +65,14 @@ export type CommercialAnalytics = {
     negociacao: number;
     venda: number;
     perda: number;
+    /** Closed as won within the selected period (by Kommo closed_at). */
+    vendaFechada: number;
+    /** Closed as lost within the selected period (by Kommo closed_at). */
+    perdaFechada: number;
+    /** Created and closed as won within the same selected period. */
+    vendaMesmoPeriodo: number;
+    /** Created and closed as lost within the same selected period. */
+    perdaMesmoPeriodo: number;
     sqlToOpportunity: number;
     opportunityToNegotiation: number;
     negotiationToSale: number;
@@ -225,9 +234,10 @@ async function loadCommercialAnalyticsUncached(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<CommercialAnalytics> {
-  const [counts, campaignRows, lossReasons, aging, recentRows] =
+  const [counts, outcomes, campaignRows, lossReasons, aging, recentRows] =
     await Promise.all([
       fetchDashboardStageCounts(supabase, tenantId, filters),
+      fetchDashboardCommercialOutcomes(supabase, tenantId, filters),
       fetchDashboardDimensionPerformance(
         supabase,
         tenantId,
@@ -248,6 +258,10 @@ async function loadCommercialAnalyticsUncached(
       negociacao: counts.negociacao,
       venda: counts.venda,
       perda: counts.perda,
+      vendaFechada: outcomes.venda_fechada,
+      perdaFechada: outcomes.perda_fechada,
+      vendaMesmoPeriodo: outcomes.venda_mesmo_periodo,
+      perdaMesmoPeriodo: outcomes.perda_mesmo_periodo,
       sqlToOpportunity: percent(counts.oportunidade, counts.sql),
       opportunityToNegotiation: percent(counts.negociacao, counts.oportunidade),
       negotiationToSale: percent(counts.venda, counts.negociacao),
