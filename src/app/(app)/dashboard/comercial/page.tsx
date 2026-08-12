@@ -32,7 +32,11 @@ async function CommercialSection({
   return (
     <CommercialAnalyticsDashboard
       data={analytics}
-      empty={analytics.filteredLeads === 0}
+      empty={
+        analytics.filteredLeads === 0 &&
+        analytics.summary.vendaFechada === 0 &&
+        analytics.summary.perdaFechada === 0
+      }
     />
   );
 }
