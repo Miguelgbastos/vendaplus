@@ -7,6 +7,7 @@ import { formatNumber } from "@/lib/utils";
 import { CHART_COLORS, ChartCard, EmptyChart, FiltersEmptyState, MetricCard, SampleNote, percentLabel } from "./analytics-ui";
 
 const stageNames: Record<string, string> = { sql: "SQL", oportunidade: "Oportunidade", negociacao: "Negociação", venda: "Venda" };
+const dwellStageNames: Record<string, string> = { mql: "MQL", sal: "SAL", sql: "SQL", oportunidade: "Oportunidade", negociacao: "Negociação" };
 
 export function CommercialAnalyticsDashboard({
   data,
@@ -21,6 +22,15 @@ export function CommercialAnalyticsDashboard({
 
   const funnel = data.funnel.map((item) => ({ ...item, stage: stageNames[item.stage] ?? item.stage }));
   const campaignRows = data.campaigns.filter((row) => row.sql > 0).slice(0, 10);
+  const stageDwell = data.stageDwell.map((row) => ({
+    ...row,
+    stage: dwellStageNames[row.stage] ?? row.stage,
+    medianCurrentDays: row.medianCurrentDays ?? 0,
+    medianCycleDays: row.medianCycleDays ?? 0,
+  }));
+  const dwellIsEmpty = stageDwell.every(
+    (row) => row.openLeads === 0 && row.completedStays === 0,
+  );
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -34,9 +44,36 @@ export function CommercialAnalyticsDashboard({
         <ChartCard title="Conversão comercial" description="Volume acumulado e taxa entre etapas" className="xl:col-span-3">
           {data.summary.sql === 0 ? <EmptyChart /> : <><div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={funnel} margin={{ left: -20, right: 10, top: 12 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" /><XAxis dataKey="stage" tickLine={false} axisLine={false} fontSize={12} /><YAxis tickLine={false} axisLine={false} allowDecimals={false} fontSize={12} /><Tooltip /><Bar dataKey="count" name="Leads" fill={CHART_COLORS.blue} radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{funnel.map((item) => <div key={item.stage} className="rounded-lg bg-muted/60 p-3"><p className="text-xs text-muted-foreground">{item.stage}</p><p className="mt-1 font-semibold">{formatNumber(item.count)}</p><p className="text-xs text-primary">{item.conversion == null ? "Base" : `${percentLabel(item.conversion)} da etapa anterior`}</p></div>)}</div></>}
         </ChartCard>
-        <ChartCard title="Tempo sem atualização" description="Leads de SQL em diante por última sincronização" className="xl:col-span-2">
-          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-4" />Ajuda a priorizar leads que podem estar parados.</div>
-          {data.aging.every((item) => item.value === 0) ? <EmptyChart /> : <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.aging} layout="vertical" margin={{ left: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e3dc" /><XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} /><YAxis type="category" dataKey="name" width={80} tickLine={false} axisLine={false} fontSize={12} /><Tooltip /><Bar dataKey="value" name="Leads" fill={CHART_COLORS.amber} radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div>}
+        <ChartCard title="Tempo por etapa" description="Mediana de dias parado agora e do ciclo até sair da etapa" className="xl:col-span-2">
+          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-4" />Ajuda a priorizar etapas em que os leads estão travando.</div>
+          {dwellIsEmpty ? (
+            <EmptyChart />
+          ) : (
+            <>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stageDwell} margin={{ left: -20, right: 10, top: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" />
+                    <XAxis dataKey="stage" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis tickLine={false} axisLine={false} fontSize={12} unit="d" />
+                    <Tooltip formatter={(value) => `${value ?? 0} dias`} />
+                    <Legend verticalAlign="top" align="center" height={28} />
+                    <Bar dataKey="medianCurrentDays" name="Parado agora (mediana)" fill={CHART_COLORS.amber} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="medianCycleDays" name="Ciclo até sair (mediana)" fill={CHART_COLORS.blue} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {stageDwell.map((row) => (
+                  <div key={row.stage} className="rounded-lg bg-muted/60 p-2.5">
+                    <p className="text-xs text-muted-foreground">{row.stage}</p>
+                    <p className="mt-0.5 text-sm font-semibold">{formatNumber(row.openLeads)} abertos</p>
+                    <p className="text-xs text-destructive">{formatNumber(row.stuck7d)} há 7+ dias</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </ChartCard>
       </div>
 

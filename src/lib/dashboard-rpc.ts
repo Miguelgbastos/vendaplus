@@ -9,6 +9,7 @@ import type {
   DashboardNameValueRow,
   DashboardRecentLeadRow,
   DashboardStageCountsRow,
+  DashboardStageDwellRow,
   DashboardDimensionPerformanceRow,
   DashboardFilterOptionRow,
   DashboardTrendRow,
@@ -153,6 +154,18 @@ export async function fetchDashboardAging(
   return callRpc<DashboardNameValueRow[]>(
     supabase,
     "dashboard_aging",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardStageDwell(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardStageDwellRow[]> {
+  return callRpc<DashboardStageDwellRow[]>(
+    supabase,
+    "dashboard_stage_dwell",
     dashboardRpcParams(tenantId, filters),
   );
 }
