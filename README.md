@@ -7,7 +7,8 @@ Plataforma multiempresa de analytics de marketing e comercial, com autenticaçã
 - Next.js 16 (App Router) e React 19.
 - Supabase Auth SSR com cookies, `auth.getClaims()` no servidor e RLS em todas as tabelas públicas.
 - Kommo por empresa: credenciais privadas e tokens criptografados no banco; OAuth, webhook e fila isolados por `tenant_id`.
-- Menu **Configurações** com Supabase, Kommo, Usuários e Empresas.
+- Menu **Configurações** com Supabase, Kommo, Meta Ads (CAPI), Usuários e Empresas.
+- Servidor de conversão Meta Ads (CAPI) por empresa: Pixel ID, Access Token (System User) e Test Event Code criptografados, com mapa evento⇄estágio de qualificação, log auditável e envio assíncrono via fila.
 - Gestão de acesso por empresa: proprietários e administradores adicionam usuários por e-mail, definem papéis e removem vínculos sem compartilhar dados entre empresas.
 
 Na interface e na documentação, o domínio usa **empresa**. O banco preserva `tenants`, `tenant_users` e `tenant_id` por compatibilidade com dados, RLS, webhooks e integrações existentes. Uma troca física desses nomes seria uma migration destrutiva e não agrega isolamento ou segurança.
@@ -47,6 +48,7 @@ npm run dev
 5. Crie a conta do primeiro administrador, abra `/setup`, informe a primeira empresa e `SETUP_SECRET`.
 6. A conclusão roda em transação, concede `owner` ao usuário e grava um lock singleton. Novas tentativas recebem conflito. Remova `SETUP_SECRET` do deploy após concluir.
 7. Abra **Configurações → Kommo** para conectar a empresa.
+8. (Opcional) Abra **Configurações → Meta Ads (CAPI)** para configurar Pixel + Access Token de System User e o mapa de eventos por qualificação.
 
 Em bancos que já possuem empresas, a migration preenche o lock usando a empresa mais antiga, sem alterar ou apagar dados.
 

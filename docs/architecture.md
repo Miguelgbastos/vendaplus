@@ -34,9 +34,27 @@
 - `/configuracoes`: entrada administrativa única.
 - `/configuracoes/supabase`: diagnóstico somente leitura, sem revelar valores de chaves.
 - `/configuracoes/kommo`: fluxo existente do Kommo no novo agrupamento.
+- `/configuracoes/meta-capi`: servidor de conversão Meta Ads por empresa.
 - `/configuracoes/usuarios`: membros e permissões.
 - `/configuracoes/empresas`: criação e seleção de empresas.
 - Rotas antigas redirecionam temporariamente para preservar links.
+
+### Meta Ads Conversions API (CAPI) por empresa
+
+- `meta_capi_connections`: Pixel ID, Access Token de System User (AES-256-GCM
+  via `TOKEN_ENCRYPTION_KEY`) e Test Event Code por `tenant_id`. Colunas
+  sensíveis (access_token_encrypted) só via `service_role`.
+- `meta_capi_event_mappings`: mapa `qualification → event_name` (Lead,
+  Purchase, InitiateCheckout, ...). Owner/admin edita nomes, moeda, ativo/inativo
+  e se envia `value` do lead.
+- `meta_capi_events`: log auditável dos envios (event_id, HTTP status, fbtrace_id,
+  payload sem PII em claro — apenas hashes SHA-256).
+- Envio assíncrono: `processKommoJob` enfileira `send_meta_capi_event` a cada
+  transição de qualificação. O worker existente processa ambos os `job_type`s
+  e faz retry exponencial em 5xx/429.
+- `src/lib/meta-capi/` isola hashing (email/phone/nome/external_id), builder do
+  evento CAPI, client da Graph API (`v20.0/{pixel_id}/events`) e o dispatcher
+  que grava o log.
 
 ## Estratégia de terminologia
 

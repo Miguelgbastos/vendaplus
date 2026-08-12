@@ -52,6 +52,55 @@ export type FieldMapping = {
   is_active: boolean;
 };
 
+export type MetaCapiStatus =
+  | "pending"
+  | "configured"
+  | "connected"
+  | "disconnected"
+  | "error";
+
+export type MetaCapiDispatchStatus = "received" | "sent" | "failed";
+
+export type MetaCapiConnection = {
+  id: string;
+  tenant_id: string;
+  pixel_id: string | null;
+  status: MetaCapiStatus;
+  is_enabled: boolean;
+  test_event_code: string | null;
+  last_error: string | null;
+  last_sent_at: string | null;
+  connected_at: string | null;
+  /** Presente apenas em leituras via service_role — nunca no client. */
+  access_token_configured?: boolean;
+};
+
+export type MetaCapiEventMapping = {
+  id: string;
+  tenant_id: string;
+  qualification: QualificationStage;
+  event_name: string;
+  include_value: boolean;
+  currency: string;
+  is_active: boolean;
+  action_source: string;
+};
+
+export type MetaCapiEventLog = {
+  id: string;
+  tenant_id: string;
+  lead_id: string | null;
+  qualification: QualificationStage | null;
+  event_name: string;
+  event_id: string;
+  status: MetaCapiDispatchStatus;
+  http_status: number | null;
+  fbtrace_id: string | null;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
 export type KommoConnection = {
   id: string;
   tenant_id: string;
