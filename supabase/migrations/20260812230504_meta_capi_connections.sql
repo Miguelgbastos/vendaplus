@@ -4,6 +4,8 @@
 -- - Mapeamento por qualificação: qual estágio dispara qual evento (Lead/AddToCart/...)
 --   e se o valor monetário do lead entra no evento.
 -- - Log auditável dos eventos enviados (para debug e reconciliar Events Manager).
+-- - Transactional outbox: cada qualification_history elegível cria o job CAPI na
+--   mesma transação PostgreSQL, com event_id determinístico derivado do histórico.
 --
 -- RLS: metadados legíveis por membro; access_token só via service_role; escrita só
 -- por owner/admin. Nenhum privilégio para anon.
@@ -69,7 +71,7 @@ create index meta_capi_event_mappings_tenant_idx
   on public.meta_capi_event_mappings (tenant_id) where is_active;
 
 -- Log auditável dos eventos enviados. Guardamos o request_id/fbtrace_id retornado
--- pelo Meta, o status HTTP, o payload enviado (sem PII em claro — hashes) e a resposta.
+-- pelo Meta, o status HTTP e um payload sanitizado para reduzir PII em repouso.
 create table public.meta_capi_events (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants (id) on delete cascade,
@@ -95,6 +97,72 @@ create index meta_capi_events_lead_idx
   on public.meta_capi_events (lead_id);
 create index meta_capi_events_status_idx
   on public.meta_capi_events (tenant_id, status);
+
+-- ---------------------------------------------------------------------------
+-- Transactional outbox: qualification_history -> jobs(send_meta_capi_event)
+-- ---------------------------------------------------------------------------
+
+-- Garante que um mesmo event_id CAPI não origine mais de um job, mesmo que algum
+-- caller futuro tente reconciliar/reinserir o mesmo evento.
+create unique index jobs_meta_capi_event_id_unique
+  on public.jobs ((payload ->> 'event_id'))
+  where job_type = 'send_meta_capi_event'
+    and payload ? 'event_id';
+
+create or replace function private.enqueue_meta_capi_from_qualification_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from public.meta_capi_connections c
+    join public.meta_capi_event_mappings m
+      on m.tenant_id = c.tenant_id
+     and m.qualification = new.to_qualification
+    where c.tenant_id = new.tenant_id
+      and c.is_enabled = true
+      and c.pixel_id is not null
+      and c.access_token_encrypted is not null
+      and m.is_active = true
+  ) then
+    insert into public.jobs (
+      tenant_id,
+      job_type,
+      status,
+      priority,
+      payload,
+      max_attempts
+    ) values (
+      new.tenant_id,
+      'send_meta_capi_event',
+      'pending',
+      200,
+      jsonb_build_object(
+        'lead_id', new.lead_id,
+        'qualification', new.to_qualification,
+        'occurred_at', new.changed_at,
+        'event_id', 'qh-' || new.id::text,
+        'qualification_history_id', new.id
+      ),
+      5
+    )
+    on conflict do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function private.enqueue_meta_capi_from_qualification_history() from public;
+grant execute on function private.enqueue_meta_capi_from_qualification_history()
+  to postgres, service_role;
+
+create trigger qualification_history_enqueue_meta_capi
+  after insert on public.qualification_history
+  for each row execute function private.enqueue_meta_capi_from_qualification_history();
 
 -- ---------------------------------------------------------------------------
 -- RLS

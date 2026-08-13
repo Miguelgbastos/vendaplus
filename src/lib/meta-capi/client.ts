@@ -1,4 +1,4 @@
-import type { MetaCapiEvent } from "@/lib/meta-capi/event";
+import type { MetaCapiEvent } from "./event.ts";
 
 const DEFAULT_META_GRAPH_API_VERSION = "v20.0";
 const META_CAPI_TIMEOUT_MS = 10_000;

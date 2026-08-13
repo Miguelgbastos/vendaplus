@@ -8,7 +8,7 @@ Plataforma multiempresa de analytics de marketing e comercial, com autenticaçã
 - Supabase Auth SSR com cookies, `auth.getClaims()` no servidor e RLS em todas as tabelas públicas.
 - Kommo por empresa: credenciais privadas e tokens criptografados no banco; OAuth, webhook e fila isolados por `tenant_id`.
 - Menu **Configurações** com Supabase, Kommo, Meta Ads (CAPI), Usuários e Empresas.
-- Servidor de conversão Meta Ads (CAPI) por empresa: Pixel ID, Access Token (System User) e Test Event Code criptografados, com mapa evento⇄estágio de qualificação, log auditável e envio assíncrono via fila.
+- Servidor de conversão Meta Ads (CAPI) por empresa: Pixel ID e Test Event Code armazenados por empresa; Access Token de System User criptografado; mapa evento⇄estágio de qualificação, log auditável e envio assíncrono via outbox transacional.
 - Gestão de acesso por empresa: proprietários e administradores adicionam usuários por e-mail, definem papéis e removem vínculos sem compartilhar dados entre empresas.
 
 Na interface e na documentação, o domínio usa **empresa**. O banco preserva `tenants`, `tenant_users` e `tenant_id` por compatibilidade com dados, RLS, webhooks e integrações existentes. Uma troca física desses nomes seria uma migration destrutiva e não agrega isolamento ou segurança.
@@ -56,7 +56,7 @@ Em bancos que já possuem empresas, a migration preenche o lock usando a empresa
 
 - `NEXT_PUBLIC_APP_URL`: URL pública; o redirect do Kommo é `{APP_URL}/api/kommo/oauth/callback`.
 - `WORKER_SECRET`: protege o processador da fila.
-- `TOKEN_ENCRYPTION_KEY`: AES-256-GCM para credenciais Kommo e Meta CAPI.
+- `TOKEN_ENCRYPTION_KEY`: AES-256-GCM para tokens/segredos Kommo e Access Token do Meta CAPI.
 - `OAUTH_STATE_SECRET`: HMAC do estado OAuth.
 - `META_GRAPH_API_VERSION`: opcional; versão da Graph API no formato `vNN.N`. Se omitida, usa `v20.0` por compatibilidade.
 
@@ -68,8 +68,9 @@ Em bancos que já possuem empresas, a migration preenche o lock usando a empresa
 - `app_installations` tem RLS sem policies para clientes e acesso apenas pelo servidor.
 - A instalação compara `SETUP_SECRET` em tempo constante e usa função transacional com advisory lock.
 - Tokens e Secret Key do Kommo nunca retornam ao navegador.
-- Credenciais Kommo e Meta CAPI são criptografadas e isoladas por empresa; o worker exige segredo próprio.
+- O Access Token do Meta CAPI é criptografado e nunca retorna ao navegador; Pixel ID e Test Event Code não são tratados como segredos.
 - Eventos automáticos do Meta CAPI nunca incluem `test_event_code`; esse código é exclusivo do teste manual.
+- `qualification_history` e o job CAPI correspondente são gravados atomicamente pelo banco quando a integração e o mapping estão ativos.
 
 ## Verificação
 
