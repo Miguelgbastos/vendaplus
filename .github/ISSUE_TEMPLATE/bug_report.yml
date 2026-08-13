@@ -1,0 +1,61 @@
+name: Relatar um bug
+description: Informe um comportamento reproduzível no Venda+
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado pelo relato. Remova tokens, dados pessoais, URLs privadas e informações de clientes antes de enviar.
+  - type: textarea
+    id: description
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o resultado observado e o resultado esperado.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Como reproduzir
+      description: Liste os passos mínimos, usando somente dados fictícios.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão ou commit
+      placeholder: "Ex.: main em abc1234"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afetada
+      options:
+        - Autenticação e usuários
+        - Supabase e banco de dados
+        - Kommo
+        - Meta CAPI
+        - Dashboards
+        - Instalação ou deploy
+        - Outra
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      description: Sistema, navegador, Node.js, Supabase e método de hospedagem relevantes.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei uma issue existente sobre o mesmo problema.
+          required: true
+        - label: Removi segredos, dados pessoais e informações de clientes.
+          required: true
+        - label: Este relato não descreve uma vulnerabilidade de segurança.
+          required: true

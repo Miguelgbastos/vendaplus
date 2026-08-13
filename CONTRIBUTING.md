@@ -4,6 +4,8 @@ Obrigado por contribuir com o Venda+. Antes de começar, procure uma issue já
 existente e descreva a mudança proposta. Correções pequenas e bem delimitadas
 podem ser enviadas diretamente.
 
+Ao participar, você concorda em seguir o [Código de Conduta](CODE_OF_CONDUCT.md).
+
 ## Ambiente local
 
 1. Faça um fork e crie uma branch a partir de `main`.
@@ -32,3 +34,9 @@ sem relação com a mudança.
 
 Não envie vulnerabilidades em issues públicas. Siga a
 [política de segurança](SECURITY.md).
+
+## Licença das contribuições
+
+Ao enviar uma contribuição, você concorda que ela seja licenciada sob a mesma
+licença AGPL-3.0 do projeto e declara ter o direito de disponibilizá-la nesses
+termos.
