@@ -6,8 +6,11 @@ import {
   detectEventType,
   extractLeadIdsFromWebhookPayload,
 } from "@/lib/kommo/normalize";
+import { takeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+const MAX_PAYLOAD_BYTES = 256 * 1024;
 
 const ALLOWED_HEADERS = new Set([
   "content-type",
@@ -17,9 +20,15 @@ const ALLOWED_HEADERS = new Set([
 
 async function parseBody(request: Request): Promise<Record<string, unknown>> {
   const contentType = request.headers.get("content-type") || "";
+  const raw = await request.arrayBuffer();
+  if (raw.byteLength > MAX_PAYLOAD_BYTES) {
+    throw new Error("payload_too_large");
+  }
+  const text = new TextDecoder().decode(raw);
 
   if (contentType.includes("application/json")) {
-    const json = await request.json();
+    if (!text) return {};
+    const json = JSON.parse(text) as unknown;
     return json && typeof json === "object" ? (json as Record<string, unknown>) : { data: json };
   }
 
@@ -35,7 +44,6 @@ async function parseBody(request: Request): Promise<Record<string, unknown>> {
     return out;
   }
 
-  const text = await request.text();
   if (!text) return {};
   try {
     const json = JSON.parse(text) as unknown;
@@ -80,17 +88,20 @@ function pickSafeHeaders(request: Request): Record<string, string> {
   return out;
 }
 
-function isUniqueViolation(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return error.code === "23505" || /duplicate key|unique constraint/i.test(error.message || "");
-}
-
 export async function POST(
   request: Request,
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params;
   const started = Date.now();
+
+  const limited = takeRateLimit(`webhook:kommo:${token.slice(0, 16)}`, 120, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, error: "rate_limited" },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } },
+    );
+  }
 
   try {
     const admin = createAdminClient();
@@ -104,77 +115,55 @@ export async function POST(
       return NextResponse.json({ ok: false }, { status: 404 });
     }
 
-    const payload = await parseBody(request);
+    let payload: Record<string, unknown>;
+    try {
+      payload = await parseBody(request);
+    } catch (parseError) {
+      if (parseError instanceof Error && parseError.message === "payload_too_large") {
+        return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+      }
+      return NextResponse.json({ ok: false, error: "invalid_payload" }, { status: 400 });
+    }
+
     const idempotencyKey = buildIdempotencyKey(payload, token);
     const eventType = detectEventType(payload);
     const leadIds = extractLeadIdsFromWebhookPayload(payload);
     const headersObj = pickSafeHeaders(request);
 
-    const { data: rawEvent, error: insertError } = await admin
-      .from("raw_events")
-      .upsert(
-        {
-          tenant_id: endpoint.tenant_id,
-          webhook_endpoint_id: endpoint.id,
-          provider: "kommo",
-          event_type: eventType,
-          idempotency_key: idempotencyKey,
-          payload,
-          headers: headersObj,
-        },
-        {
-          onConflict: "tenant_id,provider,idempotency_key",
-          ignoreDuplicates: true,
-        },
-      )
-      .select("id")
-      .maybeSingle();
+    const { data: enqueued, error: enqueueError } = await admin.rpc(
+      "enqueue_kommo_webhook_event",
+      {
+        p_tenant_id: endpoint.tenant_id,
+        p_webhook_endpoint_id: endpoint.id,
+        p_event_type: eventType,
+        p_idempotency_key: idempotencyKey,
+        p_payload: payload,
+        p_headers: headersObj,
+        p_lead_ids: leadIds,
+      },
+    );
 
-    let rawEventId = rawEvent?.id ?? null;
-    if (!rawEventId) {
-      const { data: existing } = await admin
-        .from("raw_events")
-        .select("id")
-        .eq("tenant_id", endpoint.tenant_id)
-        .eq("provider", "kommo")
-        .eq("idempotency_key", idempotencyKey)
-        .maybeSingle();
-      rawEventId = existing?.id ?? null;
+    if (enqueueError) {
+      console.error("enqueue_kommo_webhook_event", enqueueError.message);
+      return NextResponse.json({ ok: false, error: "enqueue_failed" }, { status: 500 });
     }
 
-    if (insertError && !rawEventId && !isUniqueViolation(insertError)) {
-      console.error("raw_events insert", insertError.message);
-    }
+    const row = Array.isArray(enqueued) ? enqueued[0] : enqueued;
+    const rawEventId = (row as { raw_event_id?: string } | null)?.raw_event_id ?? null;
+    const created = Boolean((row as { created?: boolean } | null)?.created);
 
-    // Contact-only and other Kommo events may not reference a lead. Keep the
-    // raw event for auditability, but only enqueue work the lead synchronizer
-    // can process.
-    if (rawEventId && leadIds.length > 0) {
-      const { error: jobError } = await admin.from("jobs").insert({
-        tenant_id: endpoint.tenant_id,
-        raw_event_id: rawEventId,
-        job_type: "process_kommo_event",
-        status: "pending",
-        payload: { lead_ids: leadIds, event_type: eventType },
+    if (rawEventId && leadIds.length > 0 && created) {
+      after(async () => {
+        try {
+          await runKommoWorker({
+            limit: 10,
+            workerId: `webhook-${rawEventId}`,
+            tenantId: endpoint.tenant_id,
+          });
+        } catch (workerError) {
+          console.error("kommo webhook worker", workerError);
+        }
       });
-
-      if (jobError && !isUniqueViolation(jobError)) {
-        console.error("jobs insert", jobError.message);
-      } else if (!jobError) {
-        // Respond to Kommo immediately, then drain the PostgreSQL queue in the
-        // request's post-response lifecycle. claim_jobs keeps concurrent
-        // webhook deliveries safe and idempotent.
-        after(async () => {
-          try {
-            await runKommoWorker({
-              limit: 10,
-              workerId: `webhook-${rawEventId}`,
-            });
-          } catch (workerError) {
-            console.error("kommo webhook worker", workerError);
-          }
-        });
-      }
     }
 
     return NextResponse.json({
@@ -183,14 +172,10 @@ export async function POST(
     });
   } catch (error) {
     console.error("webhook kommo", error);
-    return NextResponse.json({ ok: true, accepted: false }, { status: 200 });
+    return NextResponse.json({ ok: false, error: "internal_error" }, { status: 500 });
   }
 }
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ token: string }> },
-) {
-  const { token } = await context.params;
-  return NextResponse.json({ ok: true, provider: "kommo", token: token.slice(0, 6) });
+export async function GET() {
+  return new NextResponse(null, { status: 204 });
 }

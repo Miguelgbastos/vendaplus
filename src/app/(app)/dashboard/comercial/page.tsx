@@ -29,10 +29,14 @@ async function CommercialSection({
   filters: DashboardFilters;
 }) {
   const analytics = await loadCommercialAnalytics(tenantId, filters);
+  const empty =
+    analytics.filteredLeads === 0 &&
+    analytics.summary.vendaFechada === 0 &&
+    analytics.summary.perdaFechada === 0;
   return (
     <CommercialAnalyticsDashboard
       data={analytics}
-      empty={analytics.filteredLeads === 0}
+      empty={empty}
     />
   );
 }

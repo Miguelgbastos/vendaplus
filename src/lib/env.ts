@@ -30,6 +30,22 @@ export function getSetupSecret(): string {
   return secret;
 }
 
+export function getWorkerSecret(): string {
+  const secret = process.env.WORKER_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("WORKER_SECRET deve ter pelo menos 32 caracteres.");
+  }
+  return secret;
+}
+
+export function getOAuthStateSecret(): string {
+  const secret = process.env.OAUTH_STATE_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("OAUTH_STATE_SECRET deve ter pelo menos 32 caracteres.");
+  }
+  return secret;
+}
+
 export function hasSupabasePublicConfig(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }

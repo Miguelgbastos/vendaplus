@@ -22,15 +22,15 @@ export function CommercialAnalyticsDashboard({
 
   const funnel = data.funnel.map((item) => ({ ...item, stage: stageNames[item.stage] ?? item.stage }));
   const campaignRows = data.campaigns.filter((row) => row.sql > 0).slice(0, 10);
-  const stageDwell = data.stageDwell.map((row) => ({
-    ...row,
-    stage: dwellStageNames[row.stage] ?? row.stage,
-    medianCurrentDays: row.medianCurrentDays ?? 0,
-    medianCycleDays: row.medianCycleDays ?? 0,
-  }));
-  const dwellIsEmpty = stageDwell.every(
-    (row) => row.openLeads === 0 && row.completedStays === 0,
-  );
+  const stageDwell = data.stageDwell
+    .filter((row) => row.openLeads > 0 || row.completedStays > 0)
+    .map((row) => ({
+      ...row,
+      stage: dwellStageNames[row.stage] ?? row.stage,
+      medianCurrentDays: row.medianCurrentDays,
+      medianCycleDays: row.medianCycleDays,
+    }));
+  const dwellIsEmpty = stageDwell.length === 0;
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -15,6 +15,8 @@ type ClaimedJob = {
 export async function runKommoWorker(options?: {
   limit?: number;
   workerId?: string;
+  tenantId?: string;
+  leaseSeconds?: number;
 }) {
   const limit = Math.min(Math.max(options?.limit ?? 10, 1), 50);
   const workerId = options?.workerId || `worker-${process.pid}`;
@@ -23,6 +25,8 @@ export async function runKommoWorker(options?: {
     p_limit: limit,
     p_worker_id: workerId,
     p_job_types: ["process_kommo_event", "send_meta_capi_event"],
+    p_tenant_id: options?.tenantId ?? null,
+    p_lease_seconds: options?.leaseSeconds ?? 300,
   });
 
   if (error) {

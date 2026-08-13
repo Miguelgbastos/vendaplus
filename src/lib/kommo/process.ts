@@ -7,6 +7,7 @@ import {
   milestonesForQualification,
   normalizeKommoLead,
 } from "@/lib/kommo/normalize";
+import { resolveClosedAt } from "@/lib/kommo/closed-at";
 import { enqueueMetaCapiEvent } from "@/lib/meta-capi/enqueue";
 import type { FieldMapping, QualificationStage } from "@/types/database";
 
@@ -43,6 +44,9 @@ export async function processKommoJob(job: JobRow): Promise<void> {
     .eq("is_active", true);
 
   for (const leadId of leadIds) {
+    if (!/^\d+$/.test(leadId) || leadId === "0") {
+      continue;
+    }
     const rawLead = await fetchKommoLead(job.tenant_id, leadId);
     const normalized = normalizeKommoLead(
       rawLead,
@@ -115,38 +119,8 @@ async function upsertNormalizedLead(
   normalized: ReturnType<typeof normalizeKommoLead>,
   rawLead: unknown,
 ) {
-  let contactId: string | null = null;
-
-  if (normalized.contact.kommoContactId || normalized.contact.email || normalized.contact.phone) {
-    const contactPayload = {
-      tenant_id: tenantId,
-      kommo_contact_id: normalized.contact.kommoContactId,
-      name: normalized.contact.name,
-      email: normalized.contact.email,
-      phone: normalized.contact.phone,
-      company: normalized.contact.company,
-      raw: normalized.contact,
-      last_seen_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    if (normalized.contact.kommoContactId) {
-      const { data } = await admin
-        .from("contacts")
-        .upsert(contactPayload, {
-          onConflict: "tenant_id,kommo_contact_id",
-        })
-        .select("id")
-        .single();
-      contactId = data?.id ?? null;
-    } else {
-      const { data } = await admin
-        .from("contacts")
-        .insert(contactPayload)
-        .select("id")
-        .single();
-      contactId = data?.id ?? null;
-    }
+  if (!normalized.kommoLeadId) {
+    throw new Error("Lead Kommo sem id.");
   }
 
   let previous: {
@@ -159,17 +133,15 @@ async function upsertNormalizedLead(
     closed_at: string | null;
   } | null = null;
 
-  if (normalized.kommoLeadId) {
-    const { data } = await admin
-      .from("leads")
-      .select(
-        "id, qualification, pipeline_id, status_id, status_name, custom_fields, closed_at",
-      )
-      .eq("tenant_id", tenantId)
-      .eq("kommo_lead_id", normalized.kommoLeadId)
-      .maybeSingle();
-    previous = data;
-  }
+  const { data } = await admin
+    .from("leads")
+    .select(
+      "id, qualification, pipeline_id, status_id, status_name, custom_fields, closed_at",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("kommo_lead_id", normalized.kommoLeadId)
+    .maybeSingle();
+  previous = data;
 
   const completedCustomFields = completeQualificationMilestones(
     {
@@ -179,58 +151,14 @@ async function upsertNormalizedLead(
     normalized.qualification,
   );
 
-  // Align dashboard date filters with Kommo "created at": prefer Kommo
-  // created_at. Only fall back to "now" on first insert when missing.
-  const firstSeenAt =
-    normalized.createdAt ??
-    (previous ? undefined : new Date().toISOString());
-
-  const isClosed =
-    normalized.qualification === "venda" ||
-    normalized.qualification === "perda";
-  const closedAt = isClosed
-    ? normalized.closedAt ?? previous?.closed_at ?? new Date().toISOString()
-    : null;
-
-  const leadPayload = {
-    tenant_id: tenantId,
-    contact_id: contactId,
-    kommo_lead_id: normalized.kommoLeadId,
-    name: normalized.name,
-    pipeline_id: normalized.pipelineId,
-    status_id: normalized.statusId,
-    status_name: normalized.statusName,
-    price: normalized.price,
-    responsible_user_id: normalized.responsibleUserId,
+  const closedAt = resolveClosedAt({
     qualification: normalized.qualification,
-    utm_source: normalized.utm_source,
-    utm_medium: normalized.utm_medium,
-    utm_campaign: normalized.utm_campaign,
-    utm_content: normalized.utm_content,
-    utm_term: normalized.utm_term,
-    custom_fields: completedCustomFields,
-    raw: rawLead,
-    ...(firstSeenAt ? { first_seen_at: firstSeenAt } : {}),
-    last_seen_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    closed_at: closedAt,
-  };
-
-  if (!normalized.kommoLeadId) {
-    throw new Error("Lead Kommo sem id.");
-  }
-
-  const { data: lead, error } = await admin
-    .from("leads")
-    .upsert(leadPayload, { onConflict: "tenant_id,kommo_lead_id" })
-    .select("id")
-    .single();
-
-  if (error || !lead) {
-    throw new Error(error?.message || "Falha ao upsert lead.");
-  }
+    kommoClosedAt: normalized.closedAt,
+    previousClosedAt: previous?.closed_at,
+  });
 
   const previousQualification = previous?.qualification ?? null;
+  let transitions: QualificationStage[] = [];
   if (
     normalized.qualification &&
     previousQualification !== normalized.qualification
@@ -239,77 +167,81 @@ async function upsertNormalizedLead(
     const previousIndex = previousQualification
       ? positiveStages.indexOf(previousQualification)
       : -1;
-    const transitions =
+    transitions =
       normalized.qualification === "perda"
-        ? ["perda" as const]
+        ? ["perda"]
         : !previousQualification
           ? positiveStages
           : previousIndex >= 0
             ? positiveStages.slice(previousIndex + 1)
             : [normalized.qualification];
-
-    let fromQualification = previousQualification;
-    const occurredAt = new Date().toISOString();
-    for (const toQualification of transitions) {
-      await admin.from("qualification_history").insert({
-        tenant_id: tenantId,
-        lead_id: lead.id,
-        from_qualification: fromQualification,
-        to_qualification: toQualification,
-        source: "kommo",
-        metadata: {
-          inferred: toQualification !== normalized.qualification,
-          initial: !previous,
-        },
-      });
-      fromQualification = toQualification;
-
-      // Servidor de conversão CAPI: enfileira sem bloquear o processamento
-      // do lead. A entrega e retries acontecem em outro job.
-      try {
-        await enqueueMetaCapiEvent(tenantId, {
-          lead_id: lead.id,
-          qualification: toQualification,
-          occurred_at: occurredAt,
-        });
-      } catch (err) {
-        console.warn(
-          "meta_capi_enqueue_failed",
-          err instanceof Error ? err.name : "error",
-        );
-      }
-    }
   }
 
-  if (
+  const stageChanged = Boolean(
     previous &&
-    (previous.status_id !== normalized.statusId ||
-      previous.pipeline_id !== normalized.pipelineId)
-  ) {
-    await admin.from("stage_history").insert({
-      tenant_id: tenantId,
-      lead_id: lead.id,
-      from_pipeline_id: previous.pipeline_id,
-      from_status_id: previous.status_id,
-      from_status_name: previous.status_name,
-      to_pipeline_id: normalized.pipelineId,
-      to_status_id: normalized.statusId,
-      to_status_name: normalized.statusName,
-      source: "kommo",
-      metadata: {},
-    });
-  } else if (!previous && (normalized.statusId || normalized.pipelineId)) {
-    await admin.from("stage_history").insert({
-      tenant_id: tenantId,
-      lead_id: lead.id,
-      from_pipeline_id: null,
-      from_status_id: null,
-      from_status_name: null,
-      to_pipeline_id: normalized.pipelineId,
-      to_status_id: normalized.statusId,
-      to_status_name: normalized.statusName,
-      source: "kommo",
-      metadata: { initial: true },
-    });
+      (previous.status_id !== normalized.statusId ||
+        previous.pipeline_id !== normalized.pipelineId),
+  );
+
+  const contactPayload = normalized.contact.kommoContactId
+    ? {
+        kommo_contact_id: normalized.contact.kommoContactId,
+        name: normalized.contact.name,
+        email: normalized.contact.email,
+        phone: normalized.contact.phone,
+        company: normalized.contact.company,
+      }
+    : null;
+
+  const { data: leadId, error } = await admin.rpc("sync_kommo_lead_state", {
+    p_tenant_id: tenantId,
+    p_kommo_lead_id: normalized.kommoLeadId,
+    p_lead: {
+      name: normalized.name,
+      pipeline_id: normalized.pipelineId,
+      status_id: normalized.statusId,
+      status_name: normalized.statusName,
+      price: normalized.price != null ? String(normalized.price) : null,
+      responsible_user_id: normalized.responsibleUserId,
+      qualification: normalized.qualification,
+      utm_source: normalized.utm_source,
+      utm_medium: normalized.utm_medium,
+      utm_campaign: normalized.utm_campaign,
+      utm_content: normalized.utm_content,
+      utm_term: normalized.utm_term,
+      custom_fields: completedCustomFields,
+      raw: rawLead,
+      first_seen_at:
+        normalized.createdAt ?? (previous ? null : new Date().toISOString()),
+      closed_at: closedAt,
+    },
+    p_contact: contactPayload,
+    p_transitions: transitions,
+    p_from_qualification: previousQualification,
+    p_stage_changed: stageChanged,
+    p_previous_pipeline_id: previous?.pipeline_id ?? null,
+    p_previous_status_id: previous?.status_id ?? null,
+    p_previous_status_name: previous?.status_name ?? null,
+  });
+
+  if (error || !leadId) {
+    throw new Error(error?.message || "Falha ao sincronizar lead.");
+  }
+
+  // Outbox CAPI é trigger SQL em qualification_history; shim mantido por compat.
+  const occurredAt = new Date().toISOString();
+  for (const toQualification of transitions) {
+    try {
+      await enqueueMetaCapiEvent(tenantId, {
+        lead_id: String(leadId),
+        qualification: toQualification,
+        occurred_at: occurredAt,
+      });
+    } catch (err) {
+      console.warn(
+        "meta_capi_enqueue_failed",
+        err instanceof Error ? err.name : "error",
+      );
+    }
   }
 }

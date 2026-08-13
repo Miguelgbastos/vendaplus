@@ -1,7 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
-const PUBLIC_PATHS = ["/login", "/cadastro"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/cadastro",
+  "/recuperar-senha",
+  "/redefinir-senha",
+  "/convite",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -22,7 +29,6 @@ export async function proxy(request: NextRequest) {
     const isAuthCallback = pathname.startsWith("/api/auth/callback");
     const isKommoOAuthCallback = pathname.startsWith("/api/kommo/oauth/callback");
 
-    // Callback OAuth precisa da sessão renovada, mas trata auth internamente
     if (isKommoOAuthCallback) {
       return supabaseResponse;
     }
@@ -30,11 +36,11 @@ export async function proxy(request: NextRequest) {
     if (!isAuthenticated && !isPublic && !isAuthCallback && pathname !== "/") {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("next", pathname);
+      url.searchParams.set("next", safeInternalPath(pathname, "/dashboard"));
       return NextResponse.redirect(url);
     }
 
-    if (isAuthenticated && (isPublic || pathname === "/")) {
+    if (isAuthenticated && (pathname === "/login" || pathname === "/cadastro" || pathname === "/")) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
@@ -42,10 +48,9 @@ export async function proxy(request: NextRequest) {
 
     return supabaseResponse;
   } catch {
-    // Sem env de Supabase no build/dev — deixa a página tratar o erro.
     if (
       pathname.startsWith("/api/kommo/oauth/callback") ||
-      PUBLIC_PATHS.includes(pathname) ||
+      PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`)) ||
       pathname === "/"
     ) {
       return NextResponse.next();
