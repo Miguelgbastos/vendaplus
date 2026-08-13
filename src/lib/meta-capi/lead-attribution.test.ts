@@ -29,4 +29,14 @@ describe("extractMetaAttribution", () => {
       "1041510245450606",
     );
   });
+
+  it("skips an invalid generic lead_id when a valid Meta id is available", () => {
+    assert.equal(
+      extractMetaAttribution({
+        lead_id: "33202095",
+        facebook_leadgen_id: "1041510245450606",
+      }).leadId,
+      "1041510245450606",
+    );
+  });
 });
