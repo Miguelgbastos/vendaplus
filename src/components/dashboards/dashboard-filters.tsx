@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,37 +72,18 @@ export function DashboardFiltersBar({
   options,
   clamped = false,
 }: Props) {
-  const filterKey = [
-    filters.from,
-    filters.to,
-    filters.campaign,
-    filters.source,
-    filters.medium,
-    filters.owner,
-    filters.stage,
-  ].join("\u0000");
-
-  return (
-    <DashboardFiltersBarContent
-      key={filterKey}
-      filters={filters}
-      options={options}
-      clamped={clamped}
-    />
-  );
-}
-
-function DashboardFiltersBarContent({
-  filters,
-  options,
-  clamped = false,
-}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [from, setFrom] = useState(filters.from);
   const [to, setTo] = useState(filters.to);
   // Optimistic base for URL patches so rapid changes don't read stale props.
   const pendingRef = useRef<DashboardFilters>(filters);
+
+  useEffect(() => {
+    setFrom(filters.from);
+    setTo(filters.to);
+    pendingRef.current = filters;
+  }, [filters]);
 
   function pushFilters(next: DashboardFilters) {
     const params = serializeDashboardFilters(next);
