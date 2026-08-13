@@ -20,8 +20,10 @@ export type MetaCapiEnqueueResult = {
  * processador Kommo ainda chama o helper; ela não realiza I/O nem cria jobs.
  */
 export async function enqueueMetaCapiEvent(
-  _tenantId: string,
-  _payload: MetaCapiJobPayload,
+  tenantId: string,
+  payload: MetaCapiJobPayload,
 ): Promise<MetaCapiEnqueueResult> {
+  void tenantId;
+  void payload;
   return { enqueued: false, reason: "database_outbox" };
 }
