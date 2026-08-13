@@ -6,6 +6,11 @@ O projeto foi desenhado para instalação independente: cada operador usa seu
 próprio Supabase, servidor, conta Kommo e conjunto de dados Meta. Nenhuma
 credencial ou infraestrutura da instalação original é necessária.
 
+> **Status do projeto:** o Venda+ está em desenvolvimento ativo. Antes de usar
+> em produção, revise as migrations, configure backups e valide as integrações
+> no seu próprio ambiente. O repositório não oferece uma instância compartilhada
+> nem credenciais prontas.
+
 ## Documentação
 
 - [Guia de instalação self-hosted](docs/installation.md)
@@ -15,6 +20,16 @@ credencial ou infraestrutura da instalação original é necessária.
 - [Arquitetura e decisões técnicas](docs/architecture.md)
 - [Como contribuir](CONTRIBUTING.md)
 - [Política de segurança](SECURITY.md)
+- [Código de conduta](CODE_OF_CONDUCT.md)
+
+## Participar da comunidade
+
+- Use **Issues** para relatar bugs reproduzíveis ou propor funcionalidades.
+- Use **Discussions** para dúvidas, ideias abertas e troca de experiências.
+- Para contribuir com código, leia o [guia de contribuição](CONTRIBUTING.md) e
+  envie um pull request pequeno e focado.
+- Vulnerabilidades devem ser relatadas de forma privada conforme a
+  [política de segurança](SECURITY.md), nunca em uma issue pública.
 
 ## Arquitetura
 
@@ -93,3 +108,10 @@ npm test
 npm run lint
 npm run build
 ```
+
+## Licença
+
+O Venda+ é distribuído sob a [GNU Affero General Public License v3.0](LICENSE).
+Se você modificar o projeto e disponibilizá-lo como serviço pela rede, deve
+oferecer aos usuários desse serviço acesso ao código-fonte correspondente,
+conforme os termos da licença.

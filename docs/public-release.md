@@ -2,8 +2,7 @@
 
 ## Antes de tornar o repositório público
 
-- [ ] Escolher e adicionar uma licença (`LICENSE`). Não publique presumindo MIT,
-  Apache ou outra licença sem decisão explícita do proprietário.
+- [x] Adicionar a licença AGPL-3.0 escolhida pelo proprietário (`LICENSE`).
 - [ ] Definir nome do mantenedor, canal de suporte e política de versões.
 - [ ] Confirmar que `.env`, dumps, exports, capturas e arquivos de backup não
   estão versionados.
@@ -20,12 +19,12 @@
 
 ## Itens recomendados para colaboração
 
-- [ ] `LICENSE`;
-- [ ] `CONTRIBUTING.md`;
-- [ ] `SECURITY.md` com canal privado para vulnerabilidades;
-- [ ] `CODE_OF_CONDUCT.md`;
-- [ ] templates de issue e pull request;
-- [ ] CI para testes, lint e build;
+- [x] `LICENSE`;
+- [x] `CONTRIBUTING.md`;
+- [x] `SECURITY.md` com canal privado para vulnerabilidades;
+- [x] `CODE_OF_CONDUCT.md`;
+- [x] templates de issue e pull request;
+- [x] CI para testes, lint e build;
 - [ ] releases e changelog;
 - [ ] imagens da interface sem dados reais;
 - [ ] dados demonstrativos ou script de seed sem PII.
@@ -58,3 +57,7 @@ git ls-files | rg '(^|/)(\.env|.*secret|.*credential)'
 
 Revise manualmente os resultados: nomes como `credentials-form.tsx` são
 legítimos; valores reais de credenciais não são.
+
+Consulte também o [relatório da auditoria inicial](open-source-audit.md). Ele
+registra o que foi verificado, as limitações da análise e as etapas que ainda
+dependem das configurações do GitHub ou de uma instalação limpa.
