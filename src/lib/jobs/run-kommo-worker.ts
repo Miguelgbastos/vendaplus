@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { failJob, processKommoJob } from "@/lib/kommo/process";
+import { processMetaCapiJob } from "@/lib/meta-capi/process";
 
 type ClaimedJob = {
   id: string;
@@ -21,7 +22,7 @@ export async function runKommoWorker(options?: {
   const { data: jobs, error } = await admin.rpc("claim_jobs", {
     p_limit: limit,
     p_worker_id: workerId,
-    p_job_types: ["process_kommo_event"],
+    p_job_types: ["process_kommo_event", "send_meta_capi_event"],
   });
 
   if (error) {
@@ -35,6 +36,8 @@ export async function runKommoWorker(options?: {
     try {
       if (job.job_type === "process_kommo_event") {
         await processKommoJob(job);
+      } else if (job.job_type === "send_meta_capi_event") {
+        await processMetaCapiJob(job);
       }
       results.push({ id: job.id, ok: true });
     } catch (err) {

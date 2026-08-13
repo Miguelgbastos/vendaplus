@@ -7,6 +7,7 @@ import {
   milestonesForQualification,
   normalizeKommoLead,
 } from "@/lib/kommo/normalize";
+import { enqueueMetaCapiEvent } from "@/lib/meta-capi/enqueue";
 import type { FieldMapping, QualificationStage } from "@/types/database";
 
 type JobRow = {
@@ -248,6 +249,7 @@ async function upsertNormalizedLead(
             : [normalized.qualification];
 
     let fromQualification = previousQualification;
+    const occurredAt = new Date().toISOString();
     for (const toQualification of transitions) {
       await admin.from("qualification_history").insert({
         tenant_id: tenantId,
@@ -261,6 +263,21 @@ async function upsertNormalizedLead(
         },
       });
       fromQualification = toQualification;
+
+      // Servidor de conversão CAPI: enfileira sem bloquear o processamento
+      // do lead. A entrega e retries acontecem em outro job.
+      try {
+        await enqueueMetaCapiEvent(tenantId, {
+          lead_id: lead.id,
+          qualification: toQualification,
+          occurred_at: occurredAt,
+        });
+      } catch (err) {
+        console.warn(
+          "meta_capi_enqueue_failed",
+          err instanceof Error ? err.name : "error",
+        );
+      }
     }
   }
 

@@ -34,9 +34,20 @@
 - `/configuracoes`: entrada administrativa única.
 - `/configuracoes/supabase`: diagnóstico somente leitura, sem revelar valores de chaves.
 - `/configuracoes/kommo`: fluxo existente do Kommo no novo agrupamento.
+- `/configuracoes/meta-capi`: servidor de conversão Meta Ads por empresa.
 - `/configuracoes/usuarios`: membros e permissões.
 - `/configuracoes/empresas`: criação e seleção de empresas.
 - Rotas antigas redirecionam temporariamente para preservar links.
+
+### Meta Ads Conversions API (CAPI) por empresa
+
+- `meta_capi_connections`: Pixel ID, Test Event Code e Access Token de System User por `tenant_id`. Somente o Access Token é criptografado com AES-256-GCM via `TOKEN_ENCRYPTION_KEY`; `access_token_encrypted` fica restrito ao `service_role`.
+- `meta_capi_event_mappings`: mapa `qualification → event_name` (Lead, Purchase, InitiateCheckout, ...). Owner/admin edita nomes, moeda, ativo/inativo e se envia `value` do lead. Os defaults são persistidos na primeira configuração.
+- `meta_capi_events`: log auditável dos envios (`event_id`, HTTP status, `fbtrace_id`). PII de `user_data` é enviada hasheada em SHA-256; o log também remove IP, user-agent, URL de origem e `content_name` por defesa em profundidade.
+- Transactional outbox: um trigger `AFTER INSERT` em `qualification_history` verifica conexão + mapping ativos e cria `send_meta_capi_event` na mesma transação PostgreSQL. O `event_id` é `qh-{qualification_history.id}`, portanto permanece estável em qualquer retry e é protegido por índice único na fila.
+- Jobs CAPI usam prioridade 200, abaixo dos jobs Kommo (100), e reaproveitam o retry exponencial existente para 5xx/429/rede.
+- `test_event_code` é exclusivo do fluxo manual de teste e nunca acompanha os eventos automáticos de produção.
+- O client da Graph API possui timeout de 10 segundos. A versão padrão permanece `v20.0` por compatibilidade e pode ser atualizada via `META_GRAPH_API_VERSION`.
 
 ## Estratégia de terminologia
 
