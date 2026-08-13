@@ -9,12 +9,15 @@ describe("buildMetaCapiEvent", () => {
       eventTimeMs: 1_780_000_000_000,
       actionSource: "system_generated",
       user: {
+        lead_id: "1041510245450606",
         email: "  Test@Example.COM ",
         phone: "(11) 98765-4321",
         full_name: "Maria da Silva",
         external_id: "contact-1",
       },
       custom: {
+        event_source: "crm",
+        lead_event_source: "Kommo",
         value: 1234.5,
         currency: "brl",
         utm_source: "meta_ads",
@@ -33,11 +36,14 @@ describe("buildMetaCapiEvent", () => {
     assert.equal((ud.fn as string[])[0].length, 64);
     assert.equal((ud.ln as string[])[0].length, 64);
     assert.equal((ud.external_id as string[])[0].length, 64);
+    assert.equal(ud.lead_id, "1041510245450606");
     assert.equal(ud.client_ip_address, undefined);
 
     assert.equal(event.custom_data?.value, 1234.5);
     assert.equal(event.custom_data?.currency, "brl");
     assert.equal(event.custom_data?.utm_source, "meta_ads");
+    assert.equal(event.custom_data?.event_source, "crm");
+    assert.equal(event.custom_data?.lead_event_source, "Kommo");
   });
 
   it("omits user_data fields when the source is empty", () => {

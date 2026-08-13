@@ -8,6 +8,7 @@ import {
 } from "./hashing.ts";
 
 export type MetaCapiUserData = {
+  lead_id?: string | null;
   email?: string | null;
   phone?: string | null;
   full_name?: string | null;
@@ -21,6 +22,7 @@ export type MetaCapiUserData = {
 };
 
 export type MetaCapiCustomData = {
+  event_source?: string | null;
   currency?: string | null;
   value?: number | null;
   content_name?: string | null;
@@ -71,6 +73,7 @@ export function buildMetaCapiEvent(input: BuildEventInput): MetaCapiEvent {
   const externalIdHash = hashExternalId(input.user.external_id);
 
   const user_data: MetaCapiEvent["user_data"] = {};
+  if (input.user.lead_id) user_data.lead_id = input.user.lead_id;
   if (emailHash) user_data.em = [emailHash];
   if (phoneHash) user_data.ph = [phoneHash];
   if (firstHash) user_data.fn = [firstHash];
@@ -85,6 +88,7 @@ export function buildMetaCapiEvent(input: BuildEventInput): MetaCapiEvent {
 
   const custom: Record<string, unknown> = {};
   if (input.custom) {
+    if (input.custom.event_source) custom.event_source = input.custom.event_source;
     if (input.custom.value != null && Number.isFinite(input.custom.value)) {
       custom.value = Number(input.custom.value);
     }

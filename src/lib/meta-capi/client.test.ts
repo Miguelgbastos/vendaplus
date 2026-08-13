@@ -23,6 +23,26 @@ function makeEvent() {
 }
 
 describe("sendCapiEvents", () => {
+  it("uses the current Meta Graph version by default", async () => {
+    delete process.env.META_GRAPH_API_VERSION;
+    let capturedUrl = "";
+
+    const fakeFetch: typeof fetch = async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ events_received: 1 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    await sendCapiEvents(
+      { pixelId: "123456789", accessToken: "token", events: [makeEvent()] },
+      fakeFetch,
+    );
+
+    assert.match(capturedUrl, /\/v26\.0\/123456789\/events$/);
+  });
+
   it("omits test_event_code from production calls and honors configured Graph version", async () => {
     process.env.META_GRAPH_API_VERSION = "v25.0";
     let capturedUrl = "";

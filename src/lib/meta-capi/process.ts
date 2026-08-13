@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatchQualificationEvent } from "@/lib/meta-capi/send";
+import { extractMetaAttribution } from "@/lib/meta-capi/lead-attribution";
 import type { QualificationStage } from "@/types/database";
 
 type JobRow = {
@@ -49,7 +50,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
   const { data: lead, error: leadError } = await admin
     .from("leads")
     .select(
-      "id, tenant_id, contact_id, name, price, utm_source, utm_medium, utm_campaign, utm_content, utm_term",
+      "id, tenant_id, contact_id, name, price, utm_source, utm_medium, utm_campaign, utm_content, utm_term, custom_fields",
     )
     .eq("id", leadId)
     .eq("tenant_id", job.tenant_id)
@@ -60,6 +61,8 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     await markJob(admin, job.id, "completed");
     return;
   }
+
+  const metaAttribution = extractMetaAttribution(lead.custom_fields);
 
   let contact: {
     kommo_contact_id: string | null;
@@ -92,10 +95,13 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     // currency configurada no mapping do tenant (fallback BRL).
     currency: null,
     user: {
+      lead_id: metaAttribution.leadId,
       email: contact?.email ?? null,
       phone: contact?.phone ?? null,
       full_name: contact?.name ?? lead.name ?? null,
       external_id: contact?.kommo_contact_id ?? lead.contact_id ?? null,
+      fbc: metaAttribution.fbc,
+      fbp: metaAttribution.fbp,
     },
     custom: {
       utm_source: lead.utm_source ?? undefined,
