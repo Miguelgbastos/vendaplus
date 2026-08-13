@@ -57,9 +57,11 @@ supabase link --project-ref SEU_PROJECT_REF
 supabase db push
 ```
 
-Revise a migration `20260731170000_dashboard_filter_indexes.sql`: índices com
-`CONCURRENTLY` não podem executar dentro de uma transação. Se o seu executor
-envolver migrations em transação, aplique esse arquivo separadamente.
+A migration `20260731170000_dashboard_filter_indexes.sql` usa `create index if
+not exists` (sem `CONCURRENTLY`) e é idempotente se os índices já existirem em
+`0001_initial.sql`.
+
+Para auth, convites e SMTP, veja também `docs/auth-invites-smtp.md`.
 
 Depois, confirme no Supabase:
 

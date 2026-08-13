@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { Activity, Building2, Database, Link2, Users } from "lucide-react";
+import { Activity, Building2, Database, HeartPulse, Link2, Users } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const SECTIONS = [
   { href: "/configuracoes/supabase", title: "Supabase", description: "Status da infraestrutura, chaves e segurança.", icon: Database },
   { href: "/configuracoes/kommo", title: "Kommo", description: "Credenciais e conexão da empresa ativa.", icon: Link2 },
   { href: "/configuracoes/meta-capi", title: "Meta Ads (CAPI)", description: "Servidor de conversão por empresa: Pixel, token e eventos.", icon: Activity },
-  { href: "/configuracoes/usuarios", title: "Usuários", description: "Membros e permissões da empresa ativa.", icon: Users },
+  { href: "/configuracoes/saude", title: "Saúde", description: "Filas, integrações e auditoria da empresa ativa.", icon: HeartPulse },
+  { href: "/configuracoes/usuarios", title: "Usuários", description: "Convites, membros e permissões da empresa ativa.", icon: Users },
   { href: "/configuracoes/empresas", title: "Empresas", description: "Empresas disponíveis e empresa ativa.", icon: Building2 },
 ];
 
