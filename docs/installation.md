@@ -53,9 +53,17 @@ arquivos nem aplique somente a migration mais recente.
 Com a Supabase CLI autenticada:
 
 ```bash
-supabase link --project-ref SEU_PROJECT_REF
-supabase db push
+npm run setup:database -- \
+  --project-ref SEU_PROJECT_REF \
+  --confirm-project SEU_PROJECT_REF
 ```
+
+O comando usa a versão fixada da Supabase CLI, mostra uma prévia, aplica apenas
+as migrations pendentes, reconcilia o histórico e valida tabelas, RLS, funções,
+trigger CAPI e lint do schema. Ele nunca executa `db reset --linked`.
+
+Para o fluxo manual equivalente, consulte `npx supabase db push --help` e execute
+`npx supabase db push --linked --dry-run` antes da aplicação.
 
 A migration `20260731170000_dashboard_filter_indexes.sql` usa `create index if
 not exists` (sem `CONCURRENTLY`) e é idempotente se os índices já existirem em
@@ -154,6 +162,10 @@ Na aplicação:
 5. confirme os dashboards de Marketing e Comercial.
 
 Consulte os guias específicos antes de ativar integrações em produção.
+
+Para preencher os dashboards sem conectar uma conta real, siga o guia de
+[dados demonstrativos](demo-data.md). Use sempre uma empresa exclusiva para a
+demonstração, sem Kommo conectado ou Meta CAPI habilitada.
 
 ## Atualizações
 

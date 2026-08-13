@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts src/lib/kommo/normalize.test.ts src/lib/kommo/client-url.test.ts src/lib/kommo/closed-at.test.ts src/lib/safe-redirect.test.ts src/lib/invites.test.ts src/lib/rate-limit.test.ts src/lib/meta-capi/hashing.test.ts src/lib/meta-capi/event.test.ts src/lib/meta-capi/client.test.ts src/lib/meta-capi/currency.test.ts src/lib/meta-capi/connection-token.test.ts src/lib/meta-capi/lead-attribution.test.ts"
+    "setup:database": "node scripts/setup-database.mjs",
+    "demo:seed": "node scripts/demo-data.mjs seed",
+    "demo:clear": "node scripts/demo-data.mjs clear",
+    "test": "node --experimental-strip-types --test scripts/supabase-cli.test.mjs src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts src/lib/kommo/normalize.test.ts src/lib/kommo/client-url.test.ts src/lib/kommo/closed-at.test.ts src/lib/safe-redirect.test.ts src/lib/invites.test.ts src/lib/rate-limit.test.ts src/lib/meta-capi/hashing.test.ts src/lib/meta-capi/event.test.ts src/lib/meta-capi/client.test.ts src/lib/meta-capi/currency.test.ts src/lib/meta-capi/connection-token.test.ts src/lib/meta-capi/lead-attribution.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
@@ -32,7 +35,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.0",
+    "supabase": "2.114.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
