@@ -107,26 +107,10 @@ export async function POST(request: Request) {
       (existing?.status === "connected" || existing?.status === "configured");
 
     const now = new Date().toISOString();
-    const payload = {
-      tenant_id: tenantId,
-      pixel_id: pixelId,
-      access_token_encrypted: accessTokenEncrypted,
-      test_event_code: parsed.data.test_event_code,
-      is_enabled: isEnabled,
-      status:
-        existing?.status === "connected" ? "connected" : ("configured" as const),
-      last_error: null,
-      updated_at: now,
-    };
 
-    const { error: upsertError } = await admin
-      .from("meta_capi_connections")
-      .upsert(payload, { onConflict: "tenant_id" });
-
-    if (upsertError) {
-      throw new Error(`meta_capi_credentials_upsert_failed:${upsertError.message}`);
-    }
-
+    // O outbox do banco só cria jobs quando há mapping ativo. Garantimos os
+    // defaults antes de habilitar/atualizar a conexão para não existir uma
+    // janela em que is_enabled=true ainda sem mappings persistidos.
     const defaultMappings = QUALIFICATIONS.map((qualification) => ({
       tenant_id: tenantId,
       qualification,
@@ -147,6 +131,26 @@ export async function POST(request: Request) {
 
     if (mappingsError) {
       throw new Error(`meta_capi_default_mappings_failed:${mappingsError.message}`);
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      pixel_id: pixelId,
+      access_token_encrypted: accessTokenEncrypted,
+      test_event_code: parsed.data.test_event_code,
+      is_enabled: isEnabled,
+      status:
+        existing?.status === "connected" ? "connected" : ("configured" as const),
+      last_error: null,
+      updated_at: now,
+    };
+
+    const { error: upsertError } = await admin
+      .from("meta_capi_connections")
+      .upsert(payload, { onConflict: "tenant_id" });
+
+    if (upsertError) {
+      throw new Error(`meta_capi_credentials_upsert_failed:${upsertError.message}`);
     }
 
     return NextResponse.json({
