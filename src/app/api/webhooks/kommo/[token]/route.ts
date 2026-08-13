@@ -36,7 +36,9 @@ async function parseBody(request: Request): Promise<Record<string, unknown>> {
     contentType.includes("application/x-www-form-urlencoded") ||
     contentType.includes("multipart/form-data")
   ) {
-    const form = await request.formData();
+    const form = await new Response(raw, {
+      headers: { "content-type": contentType },
+    }).formData();
     const out: Record<string, unknown> = {};
     form.forEach((value, key) => {
       out[key] = typeof value === "string" ? value : value.name;

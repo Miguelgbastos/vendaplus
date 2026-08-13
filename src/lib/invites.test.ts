@@ -24,6 +24,9 @@ describe("invite tokens", () => {
 
   it("builds internal accept URLs", () => {
     const url = inviteAcceptUrl("https://app.example.com", "abc.def");
-    assert.equal(url, "https://app.example.com/convite?token=abc.def");
+    assert.equal(
+      url,
+      "https://app.example.com/api/auth/callback?next=%2Fconvite%3Ftoken%3Dabc.def",
+    );
   });
 });

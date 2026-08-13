@@ -60,7 +60,7 @@ export async function PATCH(request: Request) {
     const admin = createAdminClient();
     const { data: invite, error } = await admin
       .from("tenant_invites")
-      .select("id, email, role, status, expires_at")
+      .select("id, email, role, status, expires_at, token_hash, last_sent_at")
       .eq("id", parsed.data.invite_id)
       .eq("tenant_id", parsed.data.company_id)
       .maybeSingle();
@@ -68,6 +68,12 @@ export async function PATCH(request: Request) {
     if (invite.status !== "pending") {
       return NextResponse.json({ error: "Somente convites pendentes podem ser reenviados." }, { status: 409 });
     }
+
+    const previous = {
+      token_hash: invite.token_hash,
+      expires_at: invite.expires_at,
+      last_sent_at: invite.last_sent_at,
+    };
 
     const { token, tokenHash } = createInviteToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -87,6 +93,16 @@ export async function PATCH(request: Request) {
       redirectTo: inviteAcceptUrl(token),
     });
     if (inviteError) {
+      // Restaura credenciais anteriores para que o link antigo continue válido.
+      await admin
+        .from("tenant_invites")
+        .update({
+          token_hash: previous.token_hash,
+          expires_at: previous.expires_at,
+          last_sent_at: previous.last_sent_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invite.id);
       return NextResponse.json(
         {
           error:

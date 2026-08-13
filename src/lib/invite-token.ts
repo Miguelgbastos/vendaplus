@@ -11,5 +11,6 @@ export function createInviteToken(): { token: string; tokenHash: string } {
 
 export function inviteAcceptUrl(appUrl: string, token: string): string {
   const base = appUrl.replace(/\/$/, "");
-  return `${base}/convite?token=${encodeURIComponent(token)}`;
+  const next = `/convite?token=${encodeURIComponent(token)}`;
+  return `${base}/api/auth/callback?next=${encodeURIComponent(next)}`;
 }
