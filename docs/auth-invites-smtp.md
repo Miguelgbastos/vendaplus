@@ -43,9 +43,9 @@ Sem SMTP configurado, `inviteUserByEmail` / `resetPasswordForEmail` falham ou us
 
 ## Migrations desta área
 
-- `20260813010000_profiles_email_hardening.sql`
-- `20260813011000_tenant_invites.sql`
-- `20260813012000_rls_inactive_tenant_and_fk_cohesion.sql`
-- `20260813015000_admin_audit_log.sql`
+- `20260813120959_profiles_email_hardening.sql`
+- `20260813121047_tenant_invites.sql`
+- `20260813121148_rls_inactive_tenant_and_fk_cohesion.sql`
+- `20260813121256_admin_audit_log.sql`
 
 Aplique com seu processo local/CI (`supabase db push` / pipeline). **Não** rode migrations remotas a partir deste agente sem pedido explícito.
