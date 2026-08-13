@@ -13,6 +13,8 @@ credencial ou infraestrutura da instalação original é necessária.
 - [Configuração do Meta Conversions API](docs/meta-capi.md)
 - [Checklist para publicar um fork](docs/public-release.md)
 - [Arquitetura e decisões técnicas](docs/architecture.md)
+- [Como contribuir](CONTRIBUTING.md)
+- [Política de segurança](SECURITY.md)
 
 ## Arquitetura
 
