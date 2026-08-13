@@ -1,5 +1,7 @@
 import { decryptSecret } from "@/lib/crypto";
 import { sendCapiEvents, type SendCapiEventsResult } from "@/lib/meta-capi/client";
+import { requireDecryptedAccessToken } from "@/lib/meta-capi/connection-token";
+import { resolveEventCurrency } from "@/lib/meta-capi/currency";
 import {
   buildMetaCapiEvent,
   generateEventId,
@@ -102,7 +104,7 @@ export async function dispatchQualificationEvent(
       ...(mapping.include_value
         ? {
             value: input.value ?? undefined,
-            currency: input.currency || mapping.currency || "BRL",
+            currency: resolveEventCurrency(input.currency, mapping.currency),
           }
         : {}),
       lead_status: input.qualification,
@@ -188,18 +190,12 @@ async function loadCapiConnection(
     };
   }
 
-  let accessToken: string | null = null;
-  try {
-    accessToken = await decryptSecret(connection.access_token_encrypted);
-  } catch {
-    return {
-      enabled: false,
-      reason: "not_configured",
-      pixelId: connection.pixel_id,
-      accessToken: null,
-      testEventCode: connection.test_event_code,
-    };
-  }
+  // Propaga falha de decrypt: o worker deve retentar o job em vez de
+  // registrar skipped_not_configured e concluir.
+  const accessToken = await requireDecryptedAccessToken(
+    connection.access_token_encrypted,
+    decryptSecret,
+  );
 
   return {
     enabled: connection.is_enabled,

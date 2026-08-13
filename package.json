@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts src/lib/kommo/normalize.test.ts src/lib/meta-capi/hashing.test.ts src/lib/meta-capi/event.test.ts src/lib/meta-capi/client.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/resolve-active-membership.test.ts src/lib/company-user-permissions.test.ts src/lib/kommo/oauth-exchange.test.ts src/lib/dashboard-filters.test.ts src/lib/kommo/normalize.test.ts src/lib/meta-capi/hashing.test.ts src/lib/meta-capi/event.test.ts src/lib/meta-capi/client.test.ts src/lib/meta-capi/currency.test.ts src/lib/meta-capi/connection-token.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

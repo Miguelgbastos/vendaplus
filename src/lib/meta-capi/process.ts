@@ -88,7 +88,9 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     eventId,
     occurredAt,
     value: lead.price != null ? Number(lead.price) : null,
-    currency: "BRL",
+    // Eventos automáticos não fixam moeda: dispatchQualificationEvent usa a
+    // currency configurada no mapping do tenant (fallback BRL).
+    currency: null,
     user: {
       email: contact?.email ?? null,
       phone: contact?.phone ?? null,
