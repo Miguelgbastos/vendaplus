@@ -2,6 +2,18 @@
 
 Plataforma multiempresa de analytics de marketing e comercial, com autenticação Supabase e integração Kommo sem n8n.
 
+O projeto foi desenhado para instalação independente: cada operador usa seu
+próprio Supabase, servidor, conta Kommo e conjunto de dados Meta. Nenhuma
+credencial ou infraestrutura da instalação original é necessária.
+
+## Documentação
+
+- [Guia de instalação self-hosted](docs/installation.md)
+- [Manual de uso](docs/user-manual.md)
+- [Configuração do Meta Conversions API](docs/meta-capi.md)
+- [Checklist para publicar um fork](docs/public-release.md)
+- [Arquitetura e decisões técnicas](docs/architecture.md)
+
 ## Arquitetura
 
 - Next.js 16 (App Router) e React 19.
@@ -58,7 +70,7 @@ Em bancos que já possuem empresas, a migration preenche o lock usando a empresa
 - `WORKER_SECRET`: protege o processador da fila.
 - `TOKEN_ENCRYPTION_KEY`: AES-256-GCM para tokens/segredos Kommo e Access Token do Meta CAPI.
 - `OAUTH_STATE_SECRET`: HMAC do estado OAuth.
-- `META_GRAPH_API_VERSION`: opcional; versão da Graph API no formato `vNN.N`. Se omitida, usa `v20.0` por compatibilidade.
+- `META_GRAPH_API_VERSION`: opcional; versão da Graph API no formato `vNN.N`. Se omitida, usa `v26.0`.
 
 ## Segurança
 
