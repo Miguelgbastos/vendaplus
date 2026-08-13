@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { getSetupSecret } from "@/lib/env";
+import { takeRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/utils";
 
@@ -21,6 +22,10 @@ export async function POST(request: Request) {
   try {
     const { userId } = await requireUser();
     if (!userId) return NextResponse.json({ error: "Entre na sua conta antes de instalar." }, { status: 401 });
+    const limited = takeRateLimit(`setup:complete:${userId}`, 5, 60_000);
+    if (!limited.ok) {
+      return NextResponse.json({ error: "Muitas tentativas." }, { status: 429 });
+    }
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: "Dados de instalação inválidos." }, { status: 400 });
     if (!secretsMatch(parsed.data.setup_secret, getSetupSecret())) {

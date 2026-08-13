@@ -1,24 +1,41 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SignupForm } from "@/components/auth/signup-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { isInstallationComplete } from "@/lib/installation";
 
-export default function SignupPage() {
+export default async function CadastroPage() {
+  let openSignup = true;
+  try {
+    openSignup = !(await isInstallationComplete());
+  } catch {
+    // Sem env no build — deixa o formulário tratar.
+  }
+
+  if (!openSignup) {
+    redirect("/login?signup=invite_only");
+  }
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(15,118,110,0.08),_transparent_50%)]" />
-      <Card className="relative w-full max-w-md border-border bg-card shadow-[var(--shadow-md)]">
+    <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
+      <Card className="w-full max-w-md">
         <CardHeader>
-          <p className="font-display text-3xl font-semibold text-foreground">
-            Venda<span className="text-primary">+</span>
-          </p>
-          <CardTitle className="pt-2 text-lg">Criar conta</CardTitle>
+          <CardTitle>Criar conta</CardTitle>
           <CardDescription>
-            Crie sua conta. Empresas e acessos são configurados pelo administrador.
+            Cadastro aberto apenas na primeira instalação. Depois, o acesso é
+            somente por convite.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <SignupForm />
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Já tem conta?{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Entrar
+            </Link>
+          </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

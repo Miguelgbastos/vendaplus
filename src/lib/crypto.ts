@@ -87,8 +87,8 @@ export type CreatedOAuthState = {
 
 function requireStateSecret(): string {
   const secret = process.env.OAUTH_STATE_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error("OAUTH_STATE_SECRET não configurado.");
+  if (!secret || secret.length < 32) {
+    throw new Error("OAUTH_STATE_SECRET deve ter pelo menos 32 caracteres.");
   }
   return secret;
 }

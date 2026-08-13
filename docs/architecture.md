@@ -19,8 +19,10 @@
 
 ### Usuários
 
-- Supabase Auth mantém a identidade; `profiles` guarda o perfil da aplicação.
+- Supabase Auth mantém a identidade; `profiles` espelha e-mail de `auth.users` (não editável pelo client).
 - `tenant_users` representa membership com `owner`, `admin`, `analyst` e `viewer`.
+- Após o setup, o cadastro é invite-only (`tenant_invites` + `inviteUserByEmail` no servidor).
+- Usuário já existente recebe membership imediata; o e-mail é resolvido em `auth.users`.
 - A tela de membros exige empresa ativa e limita inclusão a owner/admin.
 
 ### Empresas
