@@ -188,18 +188,7 @@ async function loadCapiConnection(
     };
   }
 
-  let accessToken: string | null = null;
-  try {
-    accessToken = await decryptSecret(connection.access_token_encrypted);
-  } catch {
-    return {
-      enabled: false,
-      reason: "not_configured",
-      pixelId: connection.pixel_id,
-      accessToken: null,
-      testEventCode: connection.test_event_code,
-    };
-  }
+  const accessToken = await decryptSecret(connection.access_token_encrypted);
 
   return {
     enabled: connection.is_enabled,

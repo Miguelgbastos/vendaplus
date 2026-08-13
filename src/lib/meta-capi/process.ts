@@ -88,7 +88,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     eventId,
     occurredAt,
     value: lead.price != null ? Number(lead.price) : null,
-    currency: "BRL",
+    currency: null,
     user: {
       email: contact?.email ?? null,
       phone: contact?.phone ?? null,
