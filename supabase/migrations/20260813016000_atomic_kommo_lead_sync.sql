@@ -170,16 +170,23 @@ begin
     end loop;
   end if;
 
-  if p_stage_changed and v_previous.id is not null then
+  -- Decide from the row locked in this transaction. Values calculated by the
+  -- worker before the RPC can be stale when two deliveries overlap.
+  if v_previous.id is not null
+     and (
+       v_previous.pipeline_id is distinct from (p_lead->>'pipeline_id')
+       or v_previous.status_id is distinct from (p_lead->>'status_id')
+     )
+  then
     insert into public.stage_history (
       tenant_id, lead_id, from_pipeline_id, from_status_id, from_status_name,
       to_pipeline_id, to_status_id, to_status_name, source
     ) values (
       p_tenant_id,
       v_lead_id,
-      p_previous_pipeline_id,
-      p_previous_status_id,
-      p_previous_status_name,
+      v_previous.pipeline_id,
+      v_previous.status_id,
+      v_previous.status_name,
       p_lead->>'pipeline_id',
       p_lead->>'status_id',
       p_lead->>'status_name',

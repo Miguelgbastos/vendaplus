@@ -1,8 +1,8 @@
 -- Harden profiles.email: authoritative sync from auth.users, column privileges,
--- and case-insensitive uniqueness after safe dedupe.
+-- and case-insensitive uniqueness without silently rewriting identities.
 
 -- ---------------------------------------------------------------------------
--- Sync + dedupe before uniqueness
+-- Sync + validate before uniqueness
 -- ---------------------------------------------------------------------------
 
 -- Prefer auth.users as source of truth for email.
@@ -14,27 +14,30 @@ from auth.users u
 where u.id = p.id
   and p.email is distinct from u.email;
 
--- Clear duplicate emails keeping the oldest profile for each lower(email).
-with ranked as (
-  select
-    id,
-    row_number() over (
-      partition by lower(trim(email))
-      order by created_at asc, id asc
-    ) as rn
-  from public.profiles
-  where email is not null
-    and btrim(email) <> ''
-)
-update public.profiles p
-set
-  email = null,
-  updated_at = now()
-from ranked r
-where p.id = r.id
-  and r.rn > 1;
+-- Never pick a winner or clear identity data automatically. If legacy rows
+-- conflict, stop the migration so an operator can reconcile them explicitly.
+do $$
+declare
+  v_duplicates text;
+begin
+  select string_agg(duplicate_email || ' (' || duplicate_count || ')', ', ')
+  into v_duplicates
+  from (
+    select lower(trim(email)) as duplicate_email, count(*) as duplicate_count
+    from public.profiles
+    where email is not null and btrim(email) <> ''
+    group by lower(trim(email))
+    having count(*) > 1
+    order by lower(trim(email))
+    limit 20
+  ) duplicates;
 
--- Profiles without a matching auth.users email stay as-is only if unique.
+  if v_duplicates is not null then
+    raise exception 'duplicate profile emails require manual reconciliation: %', v_duplicates
+      using errcode = '23505';
+  end if;
+end;
+$$;
 
 create unique index if not exists profiles_email_lower_unique
   on public.profiles (lower(trim(email)))
