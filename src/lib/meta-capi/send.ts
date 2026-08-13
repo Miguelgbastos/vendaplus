@@ -108,7 +108,8 @@ export async function dispatchQualificationEvent(
           }
         : {}),
       lead_status: input.qualification,
-      lead_event_source: "crm",
+      event_source: "crm",
+      lead_event_source: "Kommo",
     },
   });
 
@@ -149,8 +150,9 @@ export async function sendTestCapiEvent(params: {
       external_id: `vendaplus-test-${eventId}`,
     },
     custom: {
+      event_source: "crm",
       lead_status: "test",
-      lead_event_source: "test",
+      lead_event_source: "Kommo",
       currency: "BRL",
       value: 0,
     },

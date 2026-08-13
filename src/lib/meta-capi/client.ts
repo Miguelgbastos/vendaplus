@@ -1,6 +1,6 @@
 import type { MetaCapiEvent } from "./event.ts";
 
-const DEFAULT_META_GRAPH_API_VERSION = "v20.0";
+const DEFAULT_META_GRAPH_API_VERSION = "v26.0";
 const META_CAPI_TIMEOUT_MS = 10_000;
 
 export type SendCapiEventsInput = {
