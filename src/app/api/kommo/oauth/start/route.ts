@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireUser, canManageTenant, getActiveTenant } from "@/lib/auth";
 import { createOAuthState } from "@/lib/crypto";
 import {
@@ -8,33 +9,34 @@ import {
 import { shouldBlockOAuthRetry } from "@/lib/kommo/oauth-exchange";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
+import { takeRateLimit } from "@/lib/rate-limit";
 
-function redirectKommo(error?: string) {
-  const url = new URL("/kommo", getAppUrl());
-  if (error) url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
+const bodySchema = z.object({
+  tenant_id: z.string().uuid(),
+});
+
+function jsonError(error: string, status = 400) {
+  return NextResponse.json({ error }, { status });
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
     const { userId } = await requireUser();
-    if (!userId) {
-      return NextResponse.redirect(new URL("/login?next=/kommo", getAppUrl()));
-    }
+    if (!userId) return jsonError("Não autenticado.", 401);
 
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get("tenant_id");
+    const limited = takeRateLimit(`kommo-oauth-start:${userId}`, 10, 60_000);
+    if (!limited.ok) return jsonError("Muitas tentativas.", 429);
 
-    if (!tenantId) {
-      return redirectKommo("oauth_missing");
-    }
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return jsonError("Empresa inválida.");
 
+    const tenantId = parsed.data.tenant_id;
     const membership = await getActiveTenant(userId, tenantId);
-    if (!membership || membership.tenant.id !== tenantId) {
-      return redirectKommo("oauth_failed");
+    if (!membership || membership.tenant.id !== tenantId || !membership.tenant.is_active) {
+      return jsonError("Sem permissão.", 403);
     }
     if (!canManageTenant(membership.role)) {
-      return redirectKommo("oauth_failed");
+      return jsonError("Sem permissão.", 403);
     }
 
     let credentials;
@@ -46,14 +48,14 @@ export async function GET(request: Request) {
         code === "kommo_credentials_missing" ||
         code === "kommo_credentials_incomplete"
       ) {
-        return redirectKommo("kommo_not_configured");
+        return jsonError("kommo_not_configured", 400);
       }
       console.error("kommo oauth start credentials", code || "error");
-      return redirectKommo("oauth_failed");
+      return jsonError("oauth_failed", 500);
     }
 
     if (credentials.tenantId !== tenantId) {
-      return redirectKommo("oauth_failed");
+      return jsonError("oauth_failed", 500);
     }
 
     const admin = createAdminClient();
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
         updatedAt: connectionMeta.updated_at,
       })
     ) {
-      return redirectKommo("oauth_rate_limited");
+      return jsonError("oauth_rate_limited", 429);
     }
 
     const { error: connectionError } = await admin
@@ -87,7 +89,7 @@ export async function GET(request: Request) {
 
     if (connectionError) {
       console.error("kommo_connections status update failed");
-      return redirectKommo("oauth_failed");
+      return jsonError("oauth_failed", 500);
     }
 
     let created;
@@ -95,7 +97,7 @@ export async function GET(request: Request) {
       created = createOAuthState({ tenantId, userId });
     } catch {
       console.error("oauth state creation failed");
-      return redirectKommo("oauth_failed");
+      return jsonError("oauth_failed", 500);
     }
 
     const { error: stateError } = await admin.from("oauth_states").insert({
@@ -108,7 +110,7 @@ export async function GET(request: Request) {
 
     if (stateError) {
       console.error("oauth_states insert failed");
-      return redirectKommo("oauth_failed");
+      return jsonError("oauth_failed", 500);
     }
 
     const url = buildKommoAuthorizeUrl({
@@ -116,9 +118,21 @@ export async function GET(request: Request) {
       subdomain: credentials.subdomain,
       integrationId: credentials.integrationId,
     });
-    return NextResponse.redirect(url);
+    return NextResponse.json({ ok: true, authorize_url: url });
   } catch (error) {
     console.error("kommo oauth start", error instanceof Error ? error.name : "error");
-    return redirectKommo("oauth_failed");
+    return jsonError("oauth_failed", 500);
   }
+}
+
+/** Compatibilidade: GET apenas informa que o fluxo mudou para POST. */
+export async function GET() {
+  return NextResponse.json(
+    {
+      error: "use_post",
+      message: "Inicie o OAuth via POST /api/kommo/oauth/start.",
+      app: getAppUrl(),
+    },
+    { status: 405 },
+  );
 }

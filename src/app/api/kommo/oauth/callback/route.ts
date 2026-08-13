@@ -11,7 +11,7 @@ import {
 } from "@/lib/kommo/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
-import { requireUser } from "@/lib/auth";
+import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { normalizeKommoSubdomain } from "@/lib/kommo/subdomain";
 
 export async function GET(request: Request) {
@@ -36,6 +36,16 @@ export async function GET(request: Request) {
     callbackTenantId = payload.tenantId;
     if (payload.userId !== sessionUserId) {
       return NextResponse.redirect(`${appUrl}/kommo?error=oauth_user_mismatch`);
+    }
+
+    const membership = await getActiveTenant(sessionUserId, payload.tenantId);
+    if (
+      !membership ||
+      membership.tenant.id !== payload.tenantId ||
+      !membership.tenant.is_active ||
+      !canManageTenant(membership.role)
+    ) {
+      return NextResponse.redirect(`${appUrl}/kommo?error=oauth_forbidden`);
     }
 
     const stateHash = sha256Hex(state);

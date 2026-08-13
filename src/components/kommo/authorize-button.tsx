@@ -12,13 +12,32 @@ export function KommoAuthorizeButton({
   enabled: boolean;
 }) {
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function authorize() {
+  async function authorize() {
     if (!enabled || starting) return;
     setStarting(true);
-    window.location.assign(
-      `/api/kommo/oauth/start?tenant_id=${encodeURIComponent(tenantId)}`,
-    );
+    setError(null);
+    try {
+      const response = await fetch("/api/kommo/oauth/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        authorize_url?: string;
+      };
+      if (!response.ok || !body.authorize_url) {
+        setError(body.error || "Não foi possível iniciar a autorização.");
+        setStarting(false);
+        return;
+      }
+      window.location.assign(body.authorize_url);
+    } catch {
+      setError("Falha de rede ao iniciar OAuth.");
+      setStarting(false);
+    }
   }
 
   return (
@@ -32,6 +51,11 @@ export function KommoAuthorizeButton({
         {starting ? "Redirecionando…" : "Autorizar no Kommo"}
         <ExternalLink className="h-4 w-4" />
       </Button>
+      {error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
       {!enabled ? (
         <p className="text-xs text-muted-foreground">
           Salve a configuração completa (subdomínio, Integration ID e Secret Key) antes de autorizar.

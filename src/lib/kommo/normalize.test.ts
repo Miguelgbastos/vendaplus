@@ -4,11 +4,21 @@ import {
   CANONICAL_META_ADS_SOURCE,
   KOMMO_STATUS_LOST,
   KOMMO_STATUS_WON,
+  extractLeadIdsFromWebhookPayload,
   kommoUnixToIso,
   normalizeKommoLead,
   normalizeUtmSource,
   qualificationFromKommoStatusId,
 } from "./normalize.ts";
+
+describe("extractLeadIdsFromWebhookPayload", () => {
+  it("keeps only positive integer lead ids", () => {
+    const ids = extractLeadIdsFromWebhookPayload({
+      leads: [{ id: 12 }, { id: "1/../../users" }, { id: "0" }, { id: "99" }],
+    });
+    assert.deepEqual(ids.sort(), ["12", "99"]);
+  });
+});
 
 describe("qualificationFromKommoStatusId", () => {
   it("maps system won/lost status ids", () => {

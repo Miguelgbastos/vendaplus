@@ -1,11 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { getKommoRedirectUri } from "@/lib/env";
+import { buildKommoApiUrl } from "@/lib/kommo/api-url";
 import {
   assertKommoTokenResponse,
   formatKommoOAuthExchangeError,
   type KommoTokenResponse,
 } from "@/lib/kommo/oauth-exchange";
+
+export { buildKommoApiUrl };
 
 export type { KommoTokenResponse };
 
@@ -204,6 +207,8 @@ export async function getValidAccessToken(tenantId: string): Promise<{
     };
   }
 
+  // Compare-and-swap: only one worker refreshes for a given expiry snapshot.
+  const expectedExpiresAt = connection.token_expires_at;
   const refreshToken = await decryptSecret(connection.refresh_token_encrypted);
   const clientSecret = await decryptSecret(connection.client_secret_encrypted);
   const tokens = await refreshKommoToken({
@@ -216,7 +221,7 @@ export async function getValidAccessToken(tenantId: string): Promise<{
   const refreshEnc = await encryptSecret(tokens.refresh_token);
   const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  const { error: updateError } = await admin
+  let updateQuery = admin
     .from("kommo_connections")
     .update({
       access_token_encrypted: accessEnc,
@@ -229,8 +234,36 @@ export async function getValidAccessToken(tenantId: string): Promise<{
     .eq("id", connection.id)
     .eq("tenant_id", tenantId);
 
+  if (expectedExpiresAt) {
+    updateQuery = updateQuery.eq("token_expires_at", expectedExpiresAt);
+  } else {
+    updateQuery = updateQuery.is("token_expires_at", null);
+  }
+
+  const { data: updated, error: updateError } = await updateQuery
+    .select("id")
+    .maybeSingle();
+
   if (updateError) {
     throw new Error("Falha ao atualizar tokens Kommo.");
+  }
+
+  if (!updated) {
+    // Outro worker venceu o refresh — releia o token atual.
+    const { data: latest } = await admin
+      .from("kommo_connections")
+      .select("access_token_encrypted, subdomain")
+      .eq("id", connection.id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!latest?.access_token_encrypted || !latest.subdomain) {
+      throw new Error("Falha ao obter token Kommo após refresh concorrente.");
+    }
+    return {
+      accessToken: await decryptSecret(latest.access_token_encrypted),
+      subdomain: latest.subdomain,
+      connectionId: connection.id,
+    };
   }
 
   return {
@@ -246,9 +279,7 @@ export async function kommoFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const { accessToken, subdomain } = await getValidAccessToken(tenantId);
-  const url = path.startsWith("http")
-    ? path
-    : `https://${subdomain}.kommo.com${path.startsWith("/") ? path : `/${path}`}`;
+  const url = buildKommoApiUrl(subdomain, path);
 
   const res = await fetch(url, {
     ...init,
@@ -269,9 +300,12 @@ export async function kommoFetch<T>(
 }
 
 export async function fetchKommoLead(tenantId: string, leadId: string) {
+  if (!/^\d+$/.test(leadId) || leadId === "0") {
+    throw new Error("kommo_invalid_lead_id");
+  }
   const data = await kommoFetch<{
     _embedded?: { leads?: unknown[] };
-  }>(tenantId, `/api/v4/leads/${leadId}?with=contacts`);
+  }>(tenantId, `/api/v4/leads/${encodeURIComponent(leadId)}?with=contacts`);
   const embeddedLead = data._embedded?.leads?.[0];
   if (embeddedLead) return embeddedLead;
   return data as unknown;

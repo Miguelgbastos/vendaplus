@@ -335,9 +335,20 @@ export function normalizeKommoLead(
   };
 }
 
+/** Aceita apenas IDs numéricos positivos da Kommo (bloqueia path traversal). */
+export function isPositiveKommoLeadId(value: unknown): value is string {
+  if (value == null) return false;
+  const text = String(value).trim();
+  return /^\d+$/.test(text) && text !== "0";
+}
+
 export function extractLeadIdsFromWebhookPayload(payload: unknown): string[] {
   const root = asRecord(payload);
   const ids = new Set<string>();
+
+  const addId = (value: unknown) => {
+    if (isPositiveKommoLeadId(value)) ids.add(String(value).trim());
+  };
 
   const collect = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -345,10 +356,10 @@ export function extractLeadIdsFromWebhookPayload(payload: unknown): string[] {
       return;
     }
     const rec = asRecord(value);
-    if (rec.id != null) ids.add(String(rec.id));
-    if (rec.lead_id != null) ids.add(String(rec.lead_id));
+    if (rec.id != null) addId(rec.id);
+    if (rec.lead_id != null) addId(rec.lead_id);
     if (rec.element_id != null && String(rec.element_type || "") === "2") {
-      ids.add(String(rec.element_id));
+      addId(rec.element_id);
     }
   };
 
@@ -368,7 +379,7 @@ export function extractLeadIdsFromWebhookPayload(payload: unknown): string[] {
       /^leads\[[^\]]+\]\[\d+\]\[id\]$/.test(key) &&
       value != null
     ) {
-      ids.add(String(value));
+      addId(value);
     }
   }
 
