@@ -7,6 +7,7 @@ import {
   milestonesForQualification,
   normalizeKommoLead,
 } from "@/lib/kommo/normalize";
+import { resolveClosedAt } from "@/lib/kommo/closed-at";
 import { enqueueMetaCapiEvent } from "@/lib/meta-capi/enqueue";
 import type { FieldMapping, QualificationStage } from "@/types/database";
 
@@ -150,13 +151,11 @@ async function upsertNormalizedLead(
     normalized.qualification,
   );
 
-  const isClosed =
-    normalized.qualification === "venda" ||
-    normalized.qualification === "perda";
-  // Nunca inventar closed_at=now(): preferir Kommo, senão preservar anterior, senão null.
-  const closedAt = isClosed
-    ? normalized.closedAt ?? previous?.closed_at ?? null
-    : null;
+  const closedAt = resolveClosedAt({
+    qualification: normalized.qualification,
+    kommoClosedAt: normalized.closedAt,
+    previousClosedAt: previous?.closed_at,
+  });
 
   const previousQualification = previous?.qualification ?? null;
   let transitions: QualificationStage[] = [];

@@ -82,21 +82,30 @@ export async function PATCH(request: Request) {
       .eq("id", invite.id);
     if (updateError) return NextResponse.json({ error: "Falha ao renovar convite." }, { status: 500 });
 
+    // Sem user_metadata para autorização — aceite usa apenas token_hash + auth.users.email.
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(invite.email, {
       redirectTo: inviteAcceptUrl(token),
-      data: { invite_tenant_id: parsed.data.company_id, invite_role: invite.role },
     });
+    if (inviteError) {
+      return NextResponse.json(
+        {
+          error:
+            "Não foi possível reenviar o e-mail de convite. Verifique SMTP no Supabase Auth.",
+        },
+        { status: 502 },
+      );
+    }
 
     await writeAudit({
       tenantId: parsed.data.company_id,
       action: "invite.resend",
       entityType: "tenant_invites",
       entityId: invite.id,
-      metadata: { email: invite.email, email_sent: !inviteError },
+      metadata: { email: invite.email, email_sent: true },
       supabase,
     });
 
-    return NextResponse.json({ ok: true, email_sent: !inviteError });
+    return NextResponse.json({ ok: true, email_sent: true });
   } catch (error) {
     console.error("invite resend", error instanceof Error ? error.message : "error");
     return NextResponse.json({ error: "Não foi possível reenviar o convite." }, { status: 500 });

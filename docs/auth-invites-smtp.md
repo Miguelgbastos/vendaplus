@@ -6,6 +6,7 @@
 2. **Depois do setup**: o cadastro aberto redireciona para login (`signup=invite_only`). Novos usuários entram só por convite.
 3. **Usuário já existente** (mesmo e-mail em `auth.users`): o admin adiciona membership imediatamente via `manage_company_user` (identidade resolvida em `auth.users`, não em `profiles.email`).
 4. **Usuário novo**: o servidor cria `tenant_invites` (token hasheado) e chama `auth.admin.inviteUserByEmail` — nunca no browser.
+5. **Autorização do aceite** usa apenas `token_hash` + `auth.users.email` + `auth.uid()` na RPC `accept_tenant_invite`. Não use `user_metadata` / `app_metadata` para decidir membership ou papel.
 
 ## Redirect URLs no Supabase Auth
 

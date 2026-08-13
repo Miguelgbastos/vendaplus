@@ -34,6 +34,15 @@ function mutationError(message: string) {
   if (message.includes("invite_already_pending")) {
     return ["Já existe um convite pendente para este e-mail.", 409] as const;
   }
+  if (message.includes("invite_email_failed")) {
+    return [
+      "Não foi possível enviar o e-mail de convite. Verifique SMTP no Supabase Auth.",
+      502,
+    ] as const;
+  }
+  if (message.includes("audit_write_failed")) {
+    return ["Falha ao registrar auditoria administrativa.", 500] as const;
+  }
   if (message.includes("duplicate key")) {
     return ["Esse usuário já possui acesso à empresa.", 409] as const;
   }

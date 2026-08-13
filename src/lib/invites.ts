@@ -1,21 +1,21 @@
-import { createHash, randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
+import {
+  createInviteToken,
+  hashInviteToken,
+  inviteAcceptUrl as buildInviteAcceptUrl,
+} from "@/lib/invite-token";
 import type { TenantRole } from "@/types/database";
 
 export type InviteStatus = "pending" | "accepted" | "cancelled" | "expired";
 
-export function hashInviteToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-export function createInviteToken(): { token: string; tokenHash: string } {
-  const token = randomBytes(32).toString("base64url");
-  return { token, tokenHash: hashInviteToken(token) };
-}
+export {
+  createInviteToken,
+  hashInviteToken,
+} from "@/lib/invite-token";
 
 export function inviteAcceptUrl(token: string): string {
-  return `${getAppUrl()}/convite?token=${encodeURIComponent(token)}`;
+  return buildInviteAcceptUrl(getAppUrl(), token);
 }
 
 export async function findAuthUserIdByEmail(email: string): Promise<string | null> {
@@ -38,13 +38,16 @@ export async function writeAudit(input: {
   supabase?: { rpc: ReturnType<typeof createAdminClient>["rpc"] };
 }) {
   const client = input.supabase ?? createAdminClient();
-  await client.rpc("write_admin_audit", {
+  const { error } = await client.rpc("write_admin_audit", {
     p_tenant_id: input.tenantId,
     p_action: input.action,
     p_entity_type: input.entityType,
     p_entity_id: input.entityId ?? null,
     p_metadata: input.metadata ?? {},
   });
+  if (error) {
+    throw new Error(`audit_write_failed:${error.message}`);
+  }
 }
 
 export type CreateInviteResult =
@@ -107,14 +110,24 @@ export async function inviteOrAddCompanyUser(input: {
     throw new Error(insertError?.message || "invite_create_failed");
   }
 
+  // Autorização NÃO usa user_metadata — só token_hash + auth.users.email no accept RPC.
   const redirectTo = inviteAcceptUrl(token);
   const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo,
-    data: {
-      invite_tenant_id: input.tenantId,
-      invite_role: input.role,
-    },
   });
+
+  if (inviteError) {
+    await admin
+      .from("tenant_invites")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        token_hash: hashInviteToken(`failed:${invite.id}:${Date.now()}`),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", invite.id);
+    throw new Error(`invite_email_failed:${inviteError.message}`);
+  }
 
   await writeAudit({
     tenantId: input.tenantId,
@@ -124,8 +137,7 @@ export async function inviteOrAddCompanyUser(input: {
     metadata: {
       email,
       role: input.role,
-      email_sent: !inviteError,
-      invite_error: inviteError?.message ?? null,
+      email_sent: true,
     },
     supabase: input.userClient,
   });
@@ -133,6 +145,6 @@ export async function inviteOrAddCompanyUser(input: {
   return {
     kind: "invite",
     inviteId: invite.id,
-    emailSent: !inviteError,
+    emailSent: true,
   };
 }
