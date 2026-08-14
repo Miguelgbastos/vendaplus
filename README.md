@@ -14,6 +14,8 @@ credencial ou infraestrutura da instalação original é necessária.
 ## Documentação
 
 - [Guia de instalação self-hosted](docs/installation.md)
+- [Venda+ funcionando em 15 minutos](docs/quickstart.md)
+- [Dados demonstrativos](docs/demo-data.md)
 - [Manual de uso](docs/user-manual.md)
 - [Configuração do Meta Conversions API](docs/meta-capi.md)
 - [Checklist para publicar um fork](docs/public-release.md)
@@ -21,6 +23,8 @@ credencial ou infraestrutura da instalação original é necessária.
 - [Como contribuir](CONTRIBUTING.md)
 - [Política de segurança](SECURITY.md)
 - [Código de conduta](CODE_OF_CONDUCT.md)
+- [Roadmap](ROADMAP.md)
+- [Versões e suporte](docs/releases.md)
 
 ## Participar da comunidade
 

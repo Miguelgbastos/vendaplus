@@ -3,18 +3,18 @@
 ## Antes de tornar o repositório público
 
 - [x] Adicionar a licença AGPL-3.0 escolhida pelo proprietário (`LICENSE`).
-- [ ] Definir nome do mantenedor, canal de suporte e política de versões.
-- [ ] Confirmar que `.env`, dumps, exports, capturas e arquivos de backup não
+- [x] Definir nome do mantenedor, canal de suporte e política de versões.
+- [x] Confirmar que `.env`, dumps, exports, capturas e arquivos de backup não
   estão versionados.
-- [ ] Executar busca por domínios, IDs de projeto, IDs de Pixel, tokens, JWTs,
+- [x] Executar busca por domínios, IDs de projeto, IDs de Pixel, tokens, JWTs,
   chaves privadas e nomes de clientes.
 - [ ] Revogar e rotacionar qualquer segredo que já tenha sido incluído no
   histórico Git, mesmo que o arquivo tenha sido apagado depois.
-- [ ] Habilitar secret scanning e proteção de push no provedor Git.
-- [ ] Revisar migrations destrutivas e documentar ordem/compatibilidade.
-- [ ] Rodar `npm test`, `npm run lint` e `npm run build`.
-- [ ] Testar uma instalação limpa em um novo projeto Supabase.
-- [ ] Confirmar que nenhuma funcionalidade depende da infraestrutura do
+- [x] Habilitar secret scanning e proteção de push no provedor Git.
+- [x] Revisar migrations destrutivas e documentar ordem/compatibilidade.
+- [x] Rodar `npm test`, `npm run lint` e `npm run build`.
+- [x] Testar uma instalação limpa em um novo projeto Supabase.
+- [x] Confirmar que nenhuma funcionalidade depende da infraestrutura do
   mantenedor original.
 
 ## Itens recomendados para colaboração
@@ -25,9 +25,9 @@
 - [x] `CODE_OF_CONDUCT.md`;
 - [x] templates de issue e pull request;
 - [x] CI para testes, lint e build;
-- [ ] releases e changelog;
+- [x] changelog e política de releases;
 - [ ] imagens da interface sem dados reais;
-- [ ] dados demonstrativos ou script de seed sem PII.
+- [x] dados demonstrativos ou script de seed sem PII.
 
 ## Responsabilidades de cada operador
 
