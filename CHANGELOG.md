@@ -7,13 +7,7 @@ projeto usa [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
-### Adicionado
-
-- comando seguro para aplicar e validar migrations;
-- dados demonstrativos idempotentes e reversíveis;
-- quickstart, roadmap e política comunitária de versões e suporte.
-
-## [0.1.0] — 2026-08-13
+## [0.1.0] — 2026-08-14
 
 ### Adicionado
 
@@ -22,4 +16,7 @@ projeto usa [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - dashboards comercial e de marketing;
 - Meta Conversions API por empresa;
 - gestão de empresas, usuários e permissões;
-- documentação self-hosted, CI e licença AGPL-3.0.
+- documentação self-hosted, CI e licença AGPL-3.0;
+- comando seguro para aplicar e validar migrations;
+- dados demonstrativos idempotentes e reversíveis;
+- quickstart, roadmap e política comunitária de versões e suporte.
