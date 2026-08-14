@@ -43,12 +43,14 @@ export function requireTenantSlug(args) {
 }
 
 export function runSupabase(args) {
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
+  const isWindows = process.platform === "win32";
+  const command = isWindows ? "npx.cmd" : "npx";
   const result = spawnSync(command, ["supabase", ...args], {
     cwd: resolve(process.cwd()),
     env: process.env,
     encoding: "utf8",
     stdio: "inherit",
+    shell: isWindows,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Supabase CLI falhou: ${args.join(" ")}`);
