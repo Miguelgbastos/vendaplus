@@ -47,7 +47,10 @@ export function KommoCredentialsForm({
       }),
     });
 
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      users_sync?: "ok" | "failed" | "skipped";
+    };
     setLoading(false);
 
     if (!res.ok) {
@@ -59,7 +62,9 @@ export function KommoCredentialsForm({
     setLongLivedToken("");
     setSuccess(
       longLivedToken
-        ? "Token validado e conexão Kommo concluída."
+        ? data.users_sync === "failed"
+          ? "Token validado. Sincronize os usuários pelo painel da integração."
+          : "Token validado, conexão concluída e usuários sincronizados."
         : "Configuração salva. Você já pode autorizar no Kommo.",
     );
     router.refresh();

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireUser, canManageTenant, getActiveTenant } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
+import { dashboardCacheTag } from "@/lib/dashboard-cache";
 import { normalizeKommoSubdomain } from "@/lib/kommo/subdomain";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncKommoUsers } from "@/lib/kommo/users";
 
 const bodySchema = z.object({
   tenant_id: z.string().uuid(),
@@ -139,12 +142,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Falha ao salvar configuração." }, { status: 500 });
     }
 
+    let usersSync: "ok" | "failed" | "skipped" = "skipped";
+    if (longLivedTokenEncrypted) {
+      try {
+        await syncKommoUsers(tenantId);
+        revalidateTag(dashboardCacheTag(tenantId), { expire: 0 });
+        usersSync = "ok";
+      } catch (syncError) {
+        usersSync = "failed";
+        console.warn(
+          "kommo users initial sync",
+          syncError instanceof Error ? syncError.name : "error",
+        );
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       subdomain: subdomainResult.subdomain,
       secret_configured: true,
       integration_configured: true,
       connected: Boolean(longLivedTokenEncrypted),
+      users_sync: usersSync,
     });
   } catch (error) {
     console.error(

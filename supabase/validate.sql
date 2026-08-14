@@ -9,7 +9,7 @@ begin
   select array_agg(required.name order by required.name)
   into missing_tables
   from unnest(array[
-    'profiles', 'tenants', 'tenant_users', 'kommo_connections',
+    'profiles', 'tenants', 'tenant_users', 'kommo_connections', 'kommo_users',
     'webhook_endpoints', 'raw_events', 'jobs', 'contacts', 'leads',
     'qualification_history', 'stage_history', 'app_installations',
     'tenant_invites', 'admin_audit_log', 'meta_capi_connections',

@@ -115,6 +115,15 @@ export type KommoConnection = {
   has_client_secret?: boolean;
 };
 
+export type KommoUser = {
+  id: string;
+  tenant_id: string;
+  kommo_user_id: string;
+  name: string;
+  is_active: boolean;
+  synced_at: string;
+};
+
 /** Row shapes returned by the dashboard aggregate RPCs (migration dashboard_aggregates). */
 export type DashboardStageCountsRow = {
   leads_total: number;

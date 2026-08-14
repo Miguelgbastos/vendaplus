@@ -6,6 +6,7 @@ import { KommoCredentialsForm } from "@/components/kommo/credentials-form";
 import { KommoAuthorizeButton } from "@/components/kommo/authorize-button";
 import { KommoStepper } from "@/components/kommo/stepper";
 import { WebhookSetup } from "@/components/kommo/webhook-setup";
+import { SyncKommoUsersButton } from "@/components/kommo/sync-users-button";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { getAppUrl, getKommoRedirectUri } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -65,7 +66,7 @@ function messageForKommoError(code: string | undefined): string | null {
 export default async function KommoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ connected?: string; error?: string }>;
+  searchParams: Promise<{ connected?: string; error?: string; users_sync?: string }>;
 }) {
   const params = await searchParams;
   const { userId } = await requireUser();
@@ -136,6 +137,19 @@ export default async function KommoPage({
     .eq("tenant_id", membership.tenant.id)
     .in("status", ["pending", "failed", "processing"]);
 
+  const { count: kommoUsersCount } = await supabase
+    .from("kommo_users")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", membership.tenant.id)
+    .eq("is_active", true);
+  const { data: latestUserSync } = await supabase
+    .from("kommo_users")
+    .select("synced_at")
+    .eq("tenant_id", membership.tenant.id)
+    .order("synced_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const webhookUrl =
     isAdmin && webhook?.token
       ? `${getAppUrl()}/api/webhooks/kommo/${webhook.token}`
@@ -165,6 +179,12 @@ export default async function KommoPage({
       ) : null}
       {errorMessage ? (
         <p className="rounded-lg alert-error px-3 py-2 text-sm">{errorMessage}</p>
+      ) : null}
+      {params.users_sync === "failed" ? (
+        <p className="rounded-lg alert-warning px-3 py-2 text-sm">
+          Kommo conectado, mas os responsáveis ainda não foram sincronizados. Use o botão
+          “Sincronizar usuários”.
+        </p>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -203,6 +223,24 @@ export default async function KommoPage({
                   : "—"}
               </span>
             </p>
+            <p className="text-muted-foreground">
+              Responsáveis ativos:{" "}
+              <span className="text-foreground">{kommoUsersCount ?? 0}</span>
+            </p>
+            <p className="text-muted-foreground">
+              Última sincronização:{" "}
+              <span className="text-foreground">
+                {latestUserSync?.synced_at
+                  ? new Date(latestUserSync.synced_at).toLocaleString("pt-BR")
+                  : "—"}
+              </span>
+            </p>
+            {isAdmin ? (
+              <SyncKommoUsersButton
+                tenantId={membership.tenant.id}
+                disabled={connection?.status !== "connected"}
+              />
+            ) : null}
             {friendlyLastError(connection?.last_error) ? (
               <p className="text-destructive">
                 {friendlyLastError(connection?.last_error)}

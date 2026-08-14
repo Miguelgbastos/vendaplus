@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   applyLeadFilters,
   buildDimensionOptions,
+  buildOwnerOptions,
   daysBetweenInclusive,
   defaultDateRange,
   MAX_RANGE_DAYS,
@@ -176,5 +177,16 @@ describe("dashboard-filters", () => {
       options.slice(1).map((o) => o.value),
       ["alpha", "beta"],
     );
+  });
+
+  it("exibe o nome do responsável sem alterar o ID usado no filtro", () => {
+    const options = buildOwnerOptions(["12853863", "12227483"], {
+      "12227483": "Ana Souza",
+    });
+
+    assert.deepEqual(options, [
+      { value: "12853863", label: "#12853863" },
+      { value: "12227483", label: "Ana Souza" },
+    ]);
   });
 });
