@@ -4,12 +4,16 @@ import {
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import type {
+  DashboardCloseCycleStatsRow,
   DashboardCommercialOutcomesRow,
   DashboardDimension,
+  DashboardLossPreviousStageRow,
+  DashboardLossStageReasonRow,
   DashboardNameValueRow,
   DashboardRecentLeadRow,
   DashboardStageCountsRow,
   DashboardStageDwellRow,
+  DashboardStagnantOpenLeadRow,
   DashboardDimensionPerformanceRow,
   DashboardFilterOptionRow,
   DashboardTrendRow,
@@ -181,4 +185,61 @@ export async function fetchDashboardRecentLeads(
     "dashboard_recent_leads",
     { ...dashboardRpcParams(tenantId, filters), p_limit: limit },
   );
+}
+
+export async function fetchDashboardLossPreviousStage(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardLossPreviousStageRow[]> {
+  return callRpc<DashboardLossPreviousStageRow[]>(
+    supabase,
+    "dashboard_loss_previous_stage",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardLossStageReasonMatrix(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardLossStageReasonRow[]> {
+  return callRpc<DashboardLossStageReasonRow[]>(
+    supabase,
+    "dashboard_loss_stage_reason_matrix",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+export async function fetchDashboardStagnantOpenLeads(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardStagnantOpenLeadRow[]> {
+  return callRpc<DashboardStagnantOpenLeadRow[]>(
+    supabase,
+    "dashboard_stagnant_open_leads",
+    dashboardRpcParams(tenantId, filters),
+  );
+}
+
+const EMPTY_CLOSE_CYCLE: DashboardCloseCycleStatsRow = {
+  median_days_to_venda: null,
+  venda_sample_size: 0,
+  median_days_to_perda: null,
+  perda_sample_size: 0,
+  recovered_to_venda: 0,
+};
+
+export async function fetchDashboardCloseCycleStats(
+  supabase: SupabaseClient,
+  tenantId: string,
+  filters: DashboardFilters,
+): Promise<DashboardCloseCycleStatsRow> {
+  const rows = await callRpc<DashboardCloseCycleStatsRow[]>(
+    supabase,
+    "dashboard_close_cycle_stats",
+    dashboardRpcParams(tenantId, filters),
+  );
+  return rows?.[0] ?? EMPTY_CLOSE_CYCLE;
 }

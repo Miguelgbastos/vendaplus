@@ -1,15 +1,29 @@
 import {
+  buildOwnerConversion,
+  buildStagnantPriorityTable,
+  limitLossMatrixReasons,
+  normalizeCloseCycleStats,
+  previousStageBars,
+  type CloseCycleStats,
+  type OwnerConversionRow,
+  type StagnantOpenRow,
+} from "@/lib/commercial-loss-intelligence";
+import {
   cachedDashboardQuery,
   dashboardFilterCacheKey,
 } from "@/lib/dashboard-cache";
 import { type DashboardFilters } from "@/lib/dashboard-filters";
 import {
+  fetchDashboardCloseCycleStats,
   fetchDashboardCommercialOutcomes,
   fetchDashboardDimensionPerformance,
+  fetchDashboardLossPreviousStage,
   fetchDashboardLossReasons,
+  fetchDashboardLossStageReasonMatrix,
   fetchDashboardRecentLeads,
   fetchDashboardStageCounts,
   fetchDashboardStageDwell,
+  fetchDashboardStagnantOpenLeads,
   fetchDashboardTrend,
 } from "@/lib/dashboard-rpc";
 import type {
@@ -80,6 +94,21 @@ export type CommercialAnalytics = {
   funnel: FunnelPoint[];
   campaigns: CampaignPoint[];
   lossReasons: Array<{ name: string; value: number }>;
+  lossPreviousStage: Array<{
+    stage: string;
+    name: string;
+    value: number;
+    percent: number;
+  }>;
+  lossStageReasonMatrix: {
+    reasons: string[];
+    stages: string[];
+    stageLabels: Record<string, string>;
+    matrix: Record<string, Record<string, number>>;
+  };
+  stagnantOpen: StagnantOpenRow[];
+  ownerConversion: OwnerConversionRow[];
+  closeCycle: CloseCycleStats;
   stageDwell: Array<{
     stage: string;
     openLeads: number;
@@ -229,10 +258,31 @@ export async function loadCommercialAnalytics(
   filters: DashboardFilters,
 ): Promise<CommercialAnalytics> {
   return cachedDashboardQuery(
-    "commercial",
+    // v2: loss intelligence payload (previous stage, stagnant, matrix, owner, cycle)
+    "commercial-v2",
     tenantId,
     dashboardFilterCacheKey(filters),
     (supabase) => loadCommercialAnalyticsUncached(supabase, tenantId, filters),
+  );
+}
+
+async function loadOwnerNames(
+  supabase: Parameters<typeof fetchDashboardStageCounts>[0],
+  tenantId: string,
+  ownerIds: string[],
+): Promise<Record<string, string>> {
+  const unique = [...new Set(ownerIds.filter(Boolean))];
+  if (unique.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("kommo_users")
+    .select("kommo_user_id, name")
+    .eq("tenant_id", tenantId)
+    .in("kommo_user_id", unique);
+  if (error) return {};
+
+  return Object.fromEntries(
+    (data ?? []).map((user) => [String(user.kommo_user_id), String(user.name)]),
   );
 }
 
@@ -241,21 +291,57 @@ async function loadCommercialAnalyticsUncached(
   tenantId: string,
   filters: DashboardFilters,
 ): Promise<CommercialAnalytics> {
-  const [counts, outcomes, campaignRows, lossReasons, dwellRows, recentRows] =
-    await Promise.all([
-      fetchDashboardStageCounts(supabase, tenantId, filters),
-      fetchDashboardCommercialOutcomes(supabase, tenantId, filters),
-      fetchDashboardDimensionPerformance(
-        supabase,
-        tenantId,
-        filters,
-        "campaign",
-        "Sem campanha",
-      ),
-      fetchDashboardLossReasons(supabase, tenantId, filters),
-      fetchDashboardStageDwell(supabase, tenantId, filters),
-      fetchDashboardRecentLeads(supabase, tenantId, filters, 20),
-    ]);
+  const [
+    counts,
+    outcomes,
+    campaignRows,
+    ownerRows,
+    lossReasons,
+    lossPreviousStageRows,
+    lossMatrixRows,
+    stagnantRows,
+    closeCycleRow,
+    dwellRows,
+    recentRows,
+  ] = await Promise.all([
+    fetchDashboardStageCounts(supabase, tenantId, filters),
+    fetchDashboardCommercialOutcomes(supabase, tenantId, filters),
+    fetchDashboardDimensionPerformance(
+      supabase,
+      tenantId,
+      filters,
+      "campaign",
+      "Sem campanha",
+    ),
+    fetchDashboardDimensionPerformance(
+      supabase,
+      tenantId,
+      filters,
+      "owner",
+      "Sem responsável",
+    ),
+    fetchDashboardLossReasons(supabase, tenantId, filters),
+    fetchDashboardLossPreviousStage(supabase, tenantId, filters),
+    fetchDashboardLossStageReasonMatrix(supabase, tenantId, filters),
+    fetchDashboardStagnantOpenLeads(supabase, tenantId, filters),
+    fetchDashboardCloseCycleStats(supabase, tenantId, filters),
+    fetchDashboardStageDwell(supabase, tenantId, filters),
+    fetchDashboardRecentLeads(supabase, tenantId, filters, 20),
+  ]);
+
+  const ownerIds = [
+    ...ownerRows.map((row) => row.name),
+    ...stagnantRows.map((row) => row.owner_id),
+  ].filter((id) => id && id !== "Sem responsável");
+  const ownerNames = await loadOwnerNames(supabase, tenantId, ownerIds);
+
+  const lossMatrix = limitLossMatrixReasons(lossMatrixRows);
+  const stageLabels: Record<string, string> = {
+    sql: "SQL",
+    oportunidade: "Oportunidade",
+    negociacao: "Negociação",
+    sem_historico: "Sem histórico",
+  };
 
   return {
     filteredLeads: counts.leads_total,
@@ -281,6 +367,16 @@ async function loadCommercialAnalyticsUncached(
     ]),
     campaigns: toCampaignPoints(campaignRows),
     lossReasons,
+    lossPreviousStage: previousStageBars(lossPreviousStageRows),
+    lossStageReasonMatrix: {
+      reasons: lossMatrix.reasons,
+      stages: lossMatrix.stages,
+      stageLabels,
+      matrix: lossMatrix.matrix,
+    },
+    stagnantOpen: buildStagnantPriorityTable(stagnantRows, ownerNames),
+    ownerConversion: buildOwnerConversion(ownerRows, ownerNames),
+    closeCycle: normalizeCloseCycleStats(closeCycleRow),
     stageDwell: dwellRows.map((row) => ({
       stage: row.stage,
       openLeads: row.open_leads,

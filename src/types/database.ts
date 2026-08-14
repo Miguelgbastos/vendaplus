@@ -156,7 +156,38 @@ export type DashboardStageDwellRow = {
   median_cycle_days: number | string | null;
 };
 
-export type DashboardDimension = "campaign" | "source" | "medium" | "content";
+export type DashboardDimension =
+  | "campaign"
+  | "source"
+  | "medium"
+  | "content"
+  | "owner";
+
+export type DashboardLossPreviousStageRow = {
+  previous_stage: string;
+  total: number;
+};
+
+export type DashboardLossStageReasonRow = {
+  previous_stage: string;
+  reason: string;
+  total: number;
+};
+
+export type DashboardStagnantOpenLeadRow = {
+  owner_id: string;
+  stage: QualificationStage;
+  bucket: string;
+  total: number;
+};
+
+export type DashboardCloseCycleStatsRow = {
+  median_days_to_venda: number | string | null;
+  venda_sample_size: number;
+  median_days_to_perda: number | string | null;
+  perda_sample_size: number;
+  recovered_to_venda: number;
+};
 
 export type DashboardDimensionPerformanceRow = {
   name: string;
