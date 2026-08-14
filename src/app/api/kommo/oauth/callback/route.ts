@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import {
   encryptSecret,
   randomWebhookToken,
@@ -13,6 +14,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { normalizeKommoSubdomain } from "@/lib/kommo/subdomain";
+import { syncKommoUsers } from "@/lib/kommo/users";
+import { dashboardCacheTag } from "@/lib/dashboard-cache";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -150,7 +153,21 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.redirect(`${appUrl}/kommo?connected=1`);
+    let usersSync = "ok";
+    try {
+      await syncKommoUsers(payload.tenantId);
+      revalidateTag(dashboardCacheTag(payload.tenantId), "max");
+    } catch (syncError) {
+      usersSync = "failed";
+      console.warn(
+        "kommo users initial sync",
+        syncError instanceof Error ? syncError.name : "error",
+      );
+    }
+
+    return NextResponse.redirect(
+      `${appUrl}/kommo?connected=1&users_sync=${usersSync}`,
+    );
   } catch (error) {
     const safeError =
       error instanceof Error && error.message.startsWith("kommo_oauth_exchange_")

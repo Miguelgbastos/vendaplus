@@ -1,4 +1,5 @@
 import type { QualificationStage } from "../types/database";
+import { ownerLabel } from "./kommo/user-directory.ts";
 
 export const NULL_FILTER_VALUE = "__none__";
 export const MAX_RANGE_DAYS = 90;
@@ -81,10 +82,6 @@ export function isBlank(value: string | null | undefined): boolean {
 
 export function formatFilterDimensionLabel(value: string): string {
   return value.replace(/_/g, " ");
-}
-
-export function formatOwnerLabel(ownerId: string): string {
-  return /^\d+$/.test(ownerId) ? `#${ownerId}` : ownerId;
 }
 
 export function ymdInSaoPaulo(input: string | Date): string {
@@ -311,6 +308,7 @@ export function buildDimensionOptions(
 
 export function buildOwnerOptions(
   values: Array<string | null | undefined>,
+  names: Readonly<Record<string, string>> = {},
 ): Array<{ value: string; label: string }> {
   const unique = new Map<string, string>();
   let hasNone = false;
@@ -321,7 +319,7 @@ export function buildOwnerOptions(
       continue;
     }
     const raw = value!.trim();
-    if (!unique.has(raw)) unique.set(raw, formatOwnerLabel(raw));
+    if (!unique.has(raw)) unique.set(raw, ownerLabel(raw, names));
   }
 
   const options = [...unique.entries()]

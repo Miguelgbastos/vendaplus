@@ -7,6 +7,7 @@ import {
   type DashboardFilters,
 } from "@/lib/dashboard-filters";
 import { fetchDashboardFilterOptionRows } from "@/lib/dashboard-rpc";
+import { ownerLabel } from "@/lib/kommo/user-directory";
 import type { DashboardFilterOptionRow } from "@/types/database";
 
 export type DashboardFilterOption = { value: string; label: string };
@@ -37,6 +38,7 @@ export function buildDashboardFilterOptions(
     DashboardFilters,
     "campaign" | "source" | "medium" | "owner"
   >,
+  ownerNames: Readonly<Record<string, string>> = {},
 ): DashboardFilterOptions {
   const valuesFor = (dimension: DashboardFilterOptionRow["dimension"]) =>
     rows
@@ -59,9 +61,9 @@ export function buildDashboardFilterOptions(
     (value) => value.replace(/_/g, " "),
   );
   const owners = ensureSelectedOption(
-    buildOwnerOptions(valuesFor("owner")),
+    buildOwnerOptions(valuesFor("owner"), ownerNames),
     selected?.owner,
-    (value) => (/^\d+$/.test(value) ? `#${value}` : value),
+    (value) => ownerLabel(value, ownerNames),
   );
 
   return {
@@ -82,11 +84,36 @@ export async function loadDashboardFilterOptions(
   filters: DashboardFilters,
 ): Promise<DashboardFilterOptions> {
   // Só o período define os valores distintos; a seleção ativa entra depois.
-  const rows = await cachedDashboardQuery(
+  const { rows, ownerNames } = await cachedDashboardQuery(
     "filter-options",
     tenantId,
     `${filters.from}|${filters.to}`,
-    (supabase) => fetchDashboardFilterOptionRows(supabase, tenantId, filters),
+    async (supabase) => {
+      const rows = await fetchDashboardFilterOptionRows(supabase, tenantId, filters);
+      const ownerIds = [...new Set(
+        rows
+          .filter((row) => row.dimension === "owner" && row.value)
+          .map((row) => row.value as string),
+      )];
+
+      if (ownerIds.length === 0) return { rows, ownerNames: {} };
+
+      // Compatibility fallback: a code deploy before the migration must keep
+      // the dashboard usable and show #ID until the directory table exists.
+      const { data, error } = await supabase
+        .from("kommo_users")
+        .select("kommo_user_id, name")
+        .eq("tenant_id", tenantId)
+        .in("kommo_user_id", ownerIds);
+      if (error) return { rows, ownerNames: {} };
+
+      return {
+        rows,
+        ownerNames: Object.fromEntries(
+          (data ?? []).map((user) => [String(user.kommo_user_id), String(user.name)]),
+        ),
+      };
+    },
   );
-  return buildDashboardFilterOptions(rows, filters);
+  return buildDashboardFilterOptions(rows, filters, ownerNames);
 }
