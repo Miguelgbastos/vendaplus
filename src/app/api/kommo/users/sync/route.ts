@@ -31,7 +31,10 @@ export async function POST(request: Request) {
 
   try {
     const result = await syncKommoUsers(tenantId);
-    revalidateTag(dashboardCacheTag(tenantId), "max");
+    // Expira imediatamente para que o próximo refresh do dashboard veja os
+    // nomes recém-gravados em kommo_users, em vez do stale-while-revalidate
+    // do profile "max" (que ainda serviria o mapa anterior à sync).
+    revalidateTag(dashboardCacheTag(tenantId), { expire: 0 });
     await writeAudit({
       tenantId,
       action: "kommo.users_sync",

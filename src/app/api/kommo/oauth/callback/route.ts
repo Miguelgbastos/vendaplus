@@ -156,7 +156,7 @@ export async function GET(request: Request) {
     let usersSync = "ok";
     try {
       await syncKommoUsers(payload.tenantId);
-      revalidateTag(dashboardCacheTag(payload.tenantId), "max");
+      revalidateTag(dashboardCacheTag(payload.tenantId), { expire: 0 });
     } catch (syncError) {
       usersSync = "failed";
       console.warn(

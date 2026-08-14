@@ -146,7 +146,7 @@ export async function POST(request: Request) {
     if (longLivedTokenEncrypted) {
       try {
         await syncKommoUsers(tenantId);
-        revalidateTag(dashboardCacheTag(tenantId), "max");
+        revalidateTag(dashboardCacheTag(tenantId), { expire: 0 });
         usersSync = "ok";
       } catch (syncError) {
         usersSync = "failed";

@@ -85,7 +85,9 @@ export async function loadDashboardFilterOptions(
 ): Promise<DashboardFilterOptions> {
   // Só o período define os valores distintos; a seleção ativa entra depois.
   const { rows, ownerNames } = await cachedDashboardQuery(
-    "filter-options",
+    // Versão bumpada: o payload passou de DashboardFilterOptionRow[] para
+    // { rows, ownerNames }; entradas antigas quebrariam o destructuring.
+    "filter-options-v2",
     tenantId,
     `${filters.from}|${filters.to}`,
     async (supabase) => {
