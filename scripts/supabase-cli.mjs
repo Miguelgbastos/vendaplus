@@ -1,10 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const projectRefPattern = /^[a-z0-9]{20}$/;
 export const tenantSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const require = createRequire(import.meta.url);
 
 export function parseArgs(argv) {
   const parsed = {};
@@ -42,9 +45,19 @@ export function requireTenantSlug(args) {
   return tenantSlug;
 }
 
+export function getSupabaseInvocation(args) {
+  let cliPath;
+  try {
+    cliPath = require.resolve("supabase/dist/supabase.js");
+  } catch {
+    throw new Error("Supabase CLI não encontrado. Execute npm install antes de continuar.");
+  }
+  return { command: process.execPath, args: [cliPath, ...args] };
+}
+
 export function runSupabase(args) {
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
-  const result = spawnSync(command, ["supabase", ...args], {
+  const invocation = getSupabaseInvocation(args);
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: resolve(process.cwd()),
     env: process.env,
     encoding: "utf8",

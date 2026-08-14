@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  getSupabaseInvocation,
   parseArgs,
   requireProjectConfirmation,
   requireTenantSlug,
@@ -35,5 +36,13 @@ describe("Supabase setup CLI guards", () => {
     assert.equal(requireTenantSlug({ "tenant-slug": "empresa-demonstracao" }), "empresa-demonstracao");
     assert.throws(() => requireTenantSlug({ "tenant-slug": "Empresa Demo" }), /tenant-slug/);
     assert.throws(() => requireTenantSlug({ "tenant-slug": "demo'; drop table" }), /tenant-slug/);
+  });
+
+  it("invokes the local CLI through Node without relying on platform shell wrappers", () => {
+    const invocation = getSupabaseInvocation(["--version"]);
+
+    assert.equal(invocation.command, process.execPath);
+    assert.match(invocation.args[0], /supabase[/\\]dist[/\\]supabase\.js$/);
+    assert.deepEqual(invocation.args.slice(1), ["--version"]);
   });
 });
