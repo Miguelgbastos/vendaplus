@@ -5,6 +5,7 @@ import { CopyRedirectUri } from "@/components/kommo/copy-redirect-uri";
 import { KommoCredentialsForm } from "@/components/kommo/credentials-form";
 import { KommoAuthorizeButton } from "@/components/kommo/authorize-button";
 import { KommoStepper } from "@/components/kommo/stepper";
+import { WebhookSetup } from "@/components/kommo/webhook-setup";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { getAppUrl, getKommoRedirectUri } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -223,9 +224,7 @@ export default async function KommoPage({
                 A URL do webhook é visível apenas para owner/admin.
               </p>
             ) : webhookUrl ? (
-              <code className="block break-all rounded-lg border border-border bg-muted p-3 text-xs text-primary">
-                {webhookUrl}
-              </code>
+              <WebhookSetup value={webhookUrl} />
             ) : (
               <p className="text-muted-foreground">
                 O endpoint é gerado automaticamente após a autorização OAuth.
