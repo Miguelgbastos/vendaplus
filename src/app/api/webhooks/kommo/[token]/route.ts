@@ -6,59 +6,16 @@ import {
   detectEventType,
   extractLeadIdsFromWebhookPayload,
 } from "@/lib/kommo/normalize";
+import { parseKommoWebhookBody } from "@/lib/kommo/webhook-payload";
 import { takeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-
-const MAX_PAYLOAD_BYTES = 256 * 1024;
 
 const ALLOWED_HEADERS = new Set([
   "content-type",
   "user-agent",
   "x-request-id",
 ]);
-
-async function parseBody(request: Request): Promise<Record<string, unknown>> {
-  const contentType = request.headers.get("content-type") || "";
-  const raw = await request.arrayBuffer();
-  if (raw.byteLength > MAX_PAYLOAD_BYTES) {
-    throw new Error("payload_too_large");
-  }
-  const text = new TextDecoder().decode(raw);
-
-  if (contentType.includes("application/json")) {
-    if (!text) return {};
-    const json = JSON.parse(text) as unknown;
-    return json && typeof json === "object" ? (json as Record<string, unknown>) : { data: json };
-  }
-
-  if (
-    contentType.includes("application/x-www-form-urlencoded") ||
-    contentType.includes("multipart/form-data")
-  ) {
-    const form = await request.formData();
-    const out: Record<string, unknown> = {};
-    form.forEach((value, key) => {
-      out[key] = typeof value === "string" ? value : value.name;
-    });
-    return out;
-  }
-
-  if (!text) return {};
-  try {
-    const json = JSON.parse(text) as unknown;
-    return json && typeof json === "object"
-      ? (json as Record<string, unknown>)
-      : { raw: text };
-  } catch {
-    const params = new URLSearchParams(text);
-    const out: Record<string, unknown> = {};
-    params.forEach((value, key) => {
-      out[key] = value;
-    });
-    return out;
-  }
-}
 
 function buildIdempotencyKey(payload: Record<string, unknown>, token: string): string {
   const explicit =
@@ -117,7 +74,7 @@ export async function POST(
 
     let payload: Record<string, unknown>;
     try {
-      payload = await parseBody(request);
+      payload = await parseKommoWebhookBody(request);
     } catch (parseError) {
       if (parseError instanceof Error && parseError.message === "payload_too_large") {
         return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
