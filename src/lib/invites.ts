@@ -50,6 +50,28 @@ export async function writeAudit(input: {
   }
 }
 
+async function cancelPendingInvitesForEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  email: string,
+  uniqueTag: string,
+) {
+  const { error } = await admin
+    .from("tenant_invites")
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+      token_hash: hashInviteToken(`replaced:${uniqueTag}:${Date.now()}`),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tenant_id", tenantId)
+    .eq("email", email)
+    .eq("status", "pending");
+  if (error) {
+    console.error("pending invite cleanup", error.message);
+  }
+}
+
 export type CreateInviteResult =
   | { kind: "membership"; membershipId: string }
   | { kind: "invite"; inviteId: string; emailSent: boolean };
@@ -78,6 +100,12 @@ export async function createCompanyUser(input: {
       p_role: input.role,
     });
     if (error) throw new Error(error.message);
+    await cancelPendingInvitesForEmail(
+      createAdminClient(),
+      input.tenantId,
+      email,
+      existingUserId,
+    );
     await writeAudit({
       tenantId: input.tenantId,
       action: "membership.add",
@@ -119,20 +147,7 @@ export async function createCompanyUser(input: {
       metadata: { email, role: input.role, auth_user_id: created.user.id },
       supabase: input.userClient,
     });
-    const { error: pendingInviteError } = await admin
-      .from("tenant_invites")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-        token_hash: hashInviteToken(`replaced:${created.user.id}:${Date.now()}`),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("tenant_id", input.tenantId)
-      .eq("email", email)
-      .eq("status", "pending");
-    if (pendingInviteError) {
-      console.error("pending invite cleanup", pendingInviteError.message);
-    }
+    await cancelPendingInvitesForEmail(admin, input.tenantId, email, created.user.id);
   } catch (error) {
     if (membershipId) {
       await input.userClient.rpc("manage_company_user", {
@@ -172,6 +187,12 @@ export async function inviteOrAddCompanyUser(input: {
       p_role: input.role,
     });
     if (error) throw new Error(error.message);
+    await cancelPendingInvitesForEmail(
+      createAdminClient(),
+      input.tenantId,
+      email,
+      existingUserId,
+    );
     await writeAudit({
       tenantId: input.tenantId,
       action: "membership.add",

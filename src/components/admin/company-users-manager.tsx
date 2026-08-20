@@ -71,11 +71,17 @@ export function CompanyUsersManager({
       setError(result.error || "Não foi possível salvar a alteração.");
       return false;
     }
-    setInfo(
-      result.mode === "existing"
-        ? "Usuário existente vinculado à empresa. A senha atual foi preservada."
-        : "Usuário criado e vinculado à empresa. Ele já pode entrar com o e-mail e a senha definidos.",
-    );
+    if (method === "POST") {
+      setInfo(
+        result.mode === "existing"
+          ? "Usuário existente vinculado à empresa. A senha atual foi preservada."
+          : "Usuário criado e vinculado à empresa. Ele já pode entrar com o e-mail e a senha definidos.",
+      );
+    } else if (method === "PATCH") {
+      setInfo("Nível de acesso atualizado.");
+    } else {
+      setInfo("Acesso removido da empresa.");
+    }
     router.refresh();
     return true;
   }
