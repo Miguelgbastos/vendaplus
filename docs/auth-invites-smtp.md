@@ -3,10 +3,10 @@
 ## Modelo de acesso
 
 1. **Antes do primeiro setup** (`app_installations` vazio): `/cadastro` permanece aberto para criar o operador inicial.
-2. **Depois do setup**: o cadastro aberto redireciona para login (`signup=invite_only`). Novos usuários entram só por convite.
-3. **Usuário já existente** (mesmo e-mail em `auth.users`): o admin adiciona membership imediatamente via `manage_company_user` (identidade resolvida em `auth.users`, não em `profiles.email`).
-4. **Usuário novo**: o servidor cria `tenant_invites` (token hasheado) e chama `auth.admin.inviteUserByEmail` — nunca no browser.
-5. **Autorização do aceite** usa apenas `token_hash` + `auth.users.email` + `auth.uid()` na RPC `accept_tenant_invite`. Não use `user_metadata` / `app_metadata` para decidir membership ou papel.
+2. **Depois do setup**: o cadastro aberto redireciona para login (`signup=invite_only`). O link de cadastro é ocultado nesse estado para não criar um fluxo circular.
+3. **Criação administrativa**: um owner/admin informa nome, e-mail, senha inicial e papel. O servidor usa `auth.admin.createUser`, confirma o e-mail e vincula a identidade à empresa com `manage_company_user`; a chave `service_role` nunca chega ao navegador.
+4. **Usuário já existente** (mesmo e-mail em `auth.users`): o admin adiciona membership imediatamente via `manage_company_user`; a senha existente não é alterada.
+5. **Convites legados** continuam aceitos pelo fluxo `tenant_invites`; sua autorização usa apenas `token_hash` + `auth.users.email` + `auth.uid()`.
 
 ## Redirect URLs no Supabase Auth
 

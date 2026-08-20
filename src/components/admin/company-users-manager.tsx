@@ -45,7 +45,9 @@ export function CompanyUsersManager({
 }) {
   const router = useRouter();
   const roles = rolesAssignableBy(actorRole);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<TenantRole>("viewer");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,27 +65,28 @@ export function CompanyUsersManager({
     const result = (await response.json().catch(() => ({}))) as {
       error?: string;
       mode?: string;
-      email_sent?: boolean;
     };
     setBusy(null);
     if (!response.ok) {
       setError(result.error || "Não foi possível salvar a alteração.");
       return false;
     }
-    if (result.mode === "invite") {
-      setInfo(
-        result.email_sent
-          ? "Convite enviado. O usuário precisa aceitar pelo e-mail convidado."
-          : "Convite criado. Verifique SMTP/Auth do Supabase se o e-mail não chegou.",
-      );
-    }
+    setInfo(
+      result.mode === "existing"
+        ? "Usuário existente vinculado à empresa. A senha atual foi preservada."
+        : "Usuário criado e vinculado à empresa. Ele já pode entrar com o e-mail e a senha definidos.",
+    );
     router.refresh();
     return true;
   }
 
   async function addMember(event: React.FormEvent) {
     event.preventDefault();
-    if (await request("POST", { email, role }, "add")) setEmail("");
+    if (await request("POST", { full_name: fullName, email, password, role }, "add")) {
+      setFullName("");
+      setEmail("");
+      setPassword("");
+    }
   }
 
   async function removeMember(member: Member) {
@@ -134,7 +137,20 @@ export function CompanyUsersManager({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={addMember} className="grid gap-3 md:grid-cols-[1fr_190px_auto]">
+      <form onSubmit={addMember} className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="member-name">Nome</Label>
+          <Input
+            id="member-name"
+            autoComplete="name"
+            required
+            minLength={2}
+            maxLength={120}
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            placeholder="Nome completo"
+          />
+        </div>
         <div className="space-y-2">
           <Label htmlFor="member-email">E-mail do usuário</Label>
           <Input
@@ -144,6 +160,19 @@ export function CompanyUsersManager({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="usuario@empresa.com"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="member-password">Senha inicial</Label>
+          <Input
+            id="member-password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            maxLength={72}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -163,7 +192,7 @@ export function CompanyUsersManager({
         </div>
         <div className="flex items-end">
           <Button type="submit" disabled={busy !== null}>
-            {busy === "add" ? "Convidando..." : "Convidar / adicionar"}
+            {busy === "add" ? "Criando..." : "Criar usuário"}
           </Button>
         </div>
       </form>

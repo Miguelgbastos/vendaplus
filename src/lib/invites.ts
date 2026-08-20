@@ -54,6 +54,105 @@ export type CreateInviteResult =
   | { kind: "membership"; membershipId: string }
   | { kind: "invite"; inviteId: string; emailSent: boolean };
 
+export type CreateCompanyUserResult =
+  | { kind: "created"; membershipId: string; userId: string }
+  | { kind: "existing"; membershipId: string; userId: string };
+
+export async function createCompanyUser(input: {
+  tenantId: string;
+  fullName: string;
+  email: string;
+  password: string;
+  role: TenantRole;
+  userClient: { rpc: ReturnType<typeof createAdminClient>["rpc"] };
+}): Promise<CreateCompanyUserResult> {
+  const email = input.email.trim().toLowerCase();
+  const existingUserId = await findAuthUserIdByEmail(email);
+
+  if (existingUserId) {
+    const { data, error } = await input.userClient.rpc("manage_company_user", {
+      p_action: "add",
+      p_tenant_id: input.tenantId,
+      p_email: email,
+      p_membership_id: null,
+      p_role: input.role,
+    });
+    if (error) throw new Error(error.message);
+    await writeAudit({
+      tenantId: input.tenantId,
+      action: "membership.add",
+      entityType: "tenant_users",
+      entityId: String(data),
+      metadata: { email, role: input.role, mode: "existing_user" },
+      supabase: input.userClient,
+    });
+    return { kind: "existing", membershipId: String(data), userId: existingUserId };
+  }
+
+  const admin = createAdminClient();
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { full_name: input.fullName.trim() },
+  });
+  if (createError || !created.user) {
+    throw new Error(`auth_user_create_failed:${createError?.message || "unknown"}`);
+  }
+
+  let membershipId: string | null = null;
+  try {
+    const { data, error } = await input.userClient.rpc("manage_company_user", {
+      p_action: "add",
+      p_tenant_id: input.tenantId,
+      p_email: email,
+      p_membership_id: null,
+      p_role: input.role,
+    });
+    if (error) throw new Error(error.message);
+    membershipId = String(data);
+    await writeAudit({
+      tenantId: input.tenantId,
+      action: "user.create",
+      entityType: "tenant_users",
+      entityId: membershipId,
+      metadata: { email, role: input.role, auth_user_id: created.user.id },
+      supabase: input.userClient,
+    });
+    const { error: pendingInviteError } = await admin
+      .from("tenant_invites")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        token_hash: hashInviteToken(`replaced:${created.user.id}:${Date.now()}`),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("email", email)
+      .eq("status", "pending");
+    if (pendingInviteError) {
+      console.error("pending invite cleanup", pendingInviteError.message);
+    }
+  } catch (error) {
+    if (membershipId) {
+      await input.userClient.rpc("manage_company_user", {
+        p_action: "remove",
+        p_tenant_id: input.tenantId,
+        p_email: null,
+        p_membership_id: membershipId,
+        p_role: null,
+      });
+    }
+    const { error: cleanupError } = await admin.auth.admin.deleteUser(created.user.id);
+    if (cleanupError) {
+      console.error("company user rollback", cleanupError.message);
+    }
+    throw error;
+  }
+
+  return { kind: "created", membershipId, userId: created.user.id };
+}
+
 export async function inviteOrAddCompanyUser(input: {
   tenantId: string;
   email: string;

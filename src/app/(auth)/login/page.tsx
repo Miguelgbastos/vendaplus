@@ -1,8 +1,17 @@
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { isInstallationComplete } from "@/lib/installation";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  await connection();
+  let signupEnabled = true;
+  try {
+    signupEnabled = !(await isInstallationComplete());
+  } catch {
+    // Sem ambiente configurado durante o build; /cadastro ainda valida no servidor.
+  }
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(15,118,110,0.08),_transparent_50%)]" />
@@ -18,7 +27,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
-            <LoginForm />
+            <LoginForm signupEnabled={signupEnabled} />
           </Suspense>
         </CardContent>
       </Card>

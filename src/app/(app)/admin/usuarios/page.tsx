@@ -81,8 +81,7 @@ export default async function UsersAdminPage({
       <div>
         <h1 className="font-display text-3xl font-semibold text-foreground">Usuários</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Convide por e-mail, altere o nível ou remova o acesso. Após o setup, o cadastro aberto fica
-          desabilitado.
+          Crie contas com nome, e-mail e senha, altere o nível ou remova o acesso.
         </p>
       </div>
       <Card>
@@ -120,7 +119,7 @@ export default async function UsersAdminPage({
           <CardTitle>Acessos de {membership.tenant.name}</CardTitle>
           <CardDescription>
             {canManageTenant(membership.role)
-              ? "Usuários existentes entram na hora; novos recebem convite por e-mail."
+              ? "Novos usuários entram com as credenciais definidas aqui; contas existentes mantêm a senha atual."
               : "Você pode consultar os usuários, mas não alterar os acessos."}
           </CardDescription>
         </CardHeader>

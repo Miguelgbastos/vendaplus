@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { rolesAssignableBy } from "@/lib/company-user-permissions";
-import { inviteOrAddCompanyUser, writeAudit } from "@/lib/invites";
+import { createCompanyUser, writeAudit } from "@/lib/invites";
 import { takeRateLimit } from "@/lib/rate-limit";
 
 const roleSchema = z.enum(["owner", "admin", "analyst", "viewer"]);
 const addSchema = z.object({
   company_id: z.string().uuid(),
+  full_name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(320).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(72),
   role: roleSchema,
 });
 const changeSchema = z.object({
@@ -40,6 +42,9 @@ function mutationError(message: string) {
       502,
     ] as const;
   }
+  if (message.includes("auth_user_create_failed")) {
+    return ["Não foi possível criar a conta. Confirme o e-mail e os requisitos da senha.", 400] as const;
+  }
   if (message.includes("audit_write_failed")) {
     return ["Falha ao registrar auditoria administrativa.", 500] as const;
   }
@@ -70,7 +75,10 @@ export async function POST(request: Request) {
 
     const parsed = addSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: "E-mail, empresa ou papel inválido." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Informe nome, e-mail, senha com pelo menos 8 caracteres, empresa e papel válidos." },
+        { status: 400 },
+      );
     }
 
     const actor = await authorize(userId, parsed.data.company_id);
@@ -84,22 +92,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await inviteOrAddCompanyUser({
+    const result = await createCompanyUser({
       tenantId: parsed.data.company_id,
+      fullName: parsed.data.full_name,
       email: parsed.data.email,
+      password: parsed.data.password,
       role: parsed.data.role,
-      actorUserId: userId,
       userClient: supabase,
     });
-
-    if (result.kind === "membership") {
-      return NextResponse.json({ ok: true, mode: "membership" });
-    }
     return NextResponse.json({
       ok: true,
-      mode: "invite",
-      invite_id: result.inviteId,
-      email_sent: result.emailSent,
+      mode: result.kind,
+      user_id: result.userId,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "error";
