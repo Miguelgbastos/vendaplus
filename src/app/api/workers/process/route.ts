@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqualString } from "@/lib/crypto";
 import { getWorkerSecret } from "@/lib/env";
 import { runKommoWorker } from "@/lib/jobs/run-kommo-worker";
+import { runGweWorker } from "@/lib/gwe/v1/worker";
 import { takeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -32,12 +33,18 @@ export async function POST(request: Request) {
     tenant_id?: string;
   };
   try {
-    const result = await runKommoWorker({
-      limit: body.limit,
-      workerId: body.worker_id,
-      tenantId: body.tenant_id,
-    });
-    return NextResponse.json(result);
+    const [kommo, gwe] = await Promise.all([
+      runKommoWorker({
+        limit: body.limit,
+        workerId: body.worker_id,
+        tenantId: body.tenant_id,
+      }),
+      runGweWorker({
+        limit: body.limit,
+        workerId: body.worker_id ? `gwe-${body.worker_id}` : undefined,
+      }),
+    ]);
+    return NextResponse.json({ kommo, gwe });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
