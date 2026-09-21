@@ -42,6 +42,18 @@ begin
     raise exception 'vendaplus_missing_function: ingest_crm_webhook_event';
   end if;
 
+  if to_regprocedure('public.claim_processing_outbox(integer,text,integer)') is null then
+    raise exception 'vendaplus_missing_function: claim_processing_outbox';
+  end if;
+
+  if to_regprocedure('public.reconcile_crm_lead_snapshot(uuid,jsonb)') is null then
+    raise exception 'vendaplus_missing_function: reconcile_crm_lead_snapshot';
+  end if;
+
+  if to_regprocedure('public.fail_processing_outbox(uuid,text,text,integer)') is null then
+    raise exception 'vendaplus_missing_function: fail_processing_outbox';
+  end if;
+
   if to_regprocedure('public.dashboard_stage_counts(uuid,timestamp with time zone,timestamp with time zone,text,text,text,text,qualification_stage)') is null then
     raise exception 'vendaplus_missing_function: dashboard_stage_counts';
   end if;
@@ -78,6 +90,14 @@ begin
       and indexname = 'webhook_signing_keys_one_active_unique'
   ) then
     raise exception 'vendaplus_missing_index: webhook_signing_keys_one_active_unique';
+  end if;
+
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'stage_history_gwe_source_event_unique'
+  ) then
+    raise exception 'vendaplus_missing_index: stage_history_gwe_source_event_unique';
   end if;
 end;
 $validation$;
