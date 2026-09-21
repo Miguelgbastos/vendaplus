@@ -1,6 +1,6 @@
 # GWE v1 — Database Compatibility Audit
 
-**Status:** análise somente leitura; nenhuma migration acompanha este documento  
+**Status:** análise somente leitura; nenhuma migration acompanha este documento
 **Base analisada:** migrations Supabase existentes, funções SQL, RLS e fluxo
 runtime atual do Kommo/Meta CAPI
 

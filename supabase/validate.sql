@@ -13,7 +13,8 @@ begin
     'webhook_endpoints', 'raw_events', 'jobs', 'contacts', 'leads',
     'qualification_history', 'stage_history', 'app_installations',
     'tenant_invites', 'admin_audit_log', 'meta_capi_connections',
-    'meta_capi_event_mappings', 'meta_capi_events'
+    'meta_capi_event_mappings', 'meta_capi_events', 'crm_connections',
+    'webhook_signing_keys', 'event_processing', 'processing_outbox'
   ]) as required(name)
   where to_regclass(format('public.%I', required.name)) is null;
 
@@ -37,6 +38,10 @@ begin
     raise exception 'vendaplus_missing_function: sync_kommo_lead_state';
   end if;
 
+  if to_regprocedure('public.ingest_crm_webhook_event(uuid,text,text,jsonb,text,jsonb,timestamp with time zone)') is null then
+    raise exception 'vendaplus_missing_function: ingest_crm_webhook_event';
+  end if;
+
   if to_regprocedure('public.dashboard_stage_counts(uuid,timestamp with time zone,timestamp with time zone,text,text,text,text,qualification_stage)') is null then
     raise exception 'vendaplus_missing_function: dashboard_stage_counts';
   end if;
@@ -49,6 +54,30 @@ begin
       and not tgisinternal
   ) then
     raise exception 'vendaplus_missing_trigger: qualification_history_enqueue_meta_capi';
+  end if;
+
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'raw_events_connection_event_unique'
+  ) then
+    raise exception 'vendaplus_missing_index: raw_events_connection_event_unique';
+  end if;
+
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'leads_connection_external_unique'
+  ) then
+    raise exception 'vendaplus_missing_index: leads_connection_external_unique';
+  end if;
+
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'webhook_signing_keys_one_active_unique'
+  ) then
+    raise exception 'vendaplus_missing_index: webhook_signing_keys_one_active_unique';
   end if;
 end;
 $validation$;
