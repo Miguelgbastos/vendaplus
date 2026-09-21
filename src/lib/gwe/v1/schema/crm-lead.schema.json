@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.vendaplus.app/gwe/crm-lead/v1",
+  "title": "GWE CRM Lead Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "event", "lead", "lifecycle", "attribution"],
+  "properties": {
+    "schema": { "const": "gwe.crm.lead" },
+    "schema_version": { "const": 1 },
+    "event": { "$ref": "#/$defs/event" },
+    "lead": { "$ref": "#/$defs/lead" },
+    "lifecycle": { "$ref": "#/$defs/lifecycle" },
+    "attribution": { "$ref": "#/$defs/attribution" },
+    "custom": { "type": "object" }
+  },
+  "$defs": {
+    "dateTime": { "type": ["string", "null"], "format": "date-time" },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "occurred_at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "const": "lead.snapshot" },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "lead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_id", "name", "email", "phone", "owner", "pipeline",
+        "stage", "value", "created_at", "updated_at"
+      ],
+      "properties": {
+        "external_id": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "name": { "type": ["string", "null"], "maxLength": 500 },
+        "email": { "type": ["string", "null"], "format": "email", "maxLength": 320 },
+        "phone": { "type": ["string", "null"], "maxLength": 50 },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["external_id"],
+          "properties": { "external_id": { "type": ["string", "null"] } }
+        },
+        "pipeline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["external_id", "name"],
+          "properties": {
+            "external_id": { "type": ["string", "null"] },
+            "name": { "type": ["string", "null"], "maxLength": 500 }
+          }
+        },
+        "stage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["external_id", "name"],
+          "properties": {
+            "external_id": { "type": ["string", "null"] },
+            "name": { "type": ["string", "null"], "maxLength": 500 }
+          }
+        },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amount", "currency"],
+          "properties": {
+            "amount": { "type": ["number", "null"], "minimum": 0 },
+            "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" }
+          }
+        },
+        "created_at": { "$ref": "#/$defs/dateTime" },
+        "updated_at": { "$ref": "#/$defs/dateTime" }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_stage", "source_entered_at", "history_complete", "milestones"],
+      "properties": {
+        "current_stage": {
+          "enum": ["mql", "sal", "sql", "oportunidade", "negociacao", "venda", "perda", null]
+        },
+        "source_entered_at": { "$ref": "#/$defs/dateTime" },
+        "history_complete": { "type": "boolean" },
+        "milestones": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mql", "sal", "sql", "oportunidade", "negociacao", "venda", "perda"],
+          "properties": {
+            "mql": { "$ref": "#/$defs/milestone" },
+            "sal": { "$ref": "#/$defs/milestone" },
+            "sql": { "$ref": "#/$defs/milestone" },
+            "oportunidade": { "$ref": "#/$defs/milestone" },
+            "negociacao": { "$ref": "#/$defs/milestone" },
+            "venda": { "$ref": "#/$defs/milestone" },
+            "perda": { "$ref": "#/$defs/milestone" }
+          }
+        }
+      }
+    },
+    "milestone": { "enum": ["1", null] },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"],
+      "properties": {
+        "utm_source": { "type": ["string", "null"] },
+        "utm_medium": { "type": ["string", "null"] },
+        "utm_campaign": { "type": ["string", "null"] },
+        "utm_content": { "type": ["string", "null"] },
+        "utm_term": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
