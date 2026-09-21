@@ -15,6 +15,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/v1/webhooks/") ||
     pathname.startsWith("/api/workers/")
   ) {
     return NextResponse.next();
