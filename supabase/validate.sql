@@ -14,7 +14,8 @@ begin
     'qualification_history', 'stage_history', 'app_installations',
     'tenant_invites', 'admin_audit_log', 'meta_capi_connections',
     'meta_capi_event_mappings', 'meta_capi_events', 'crm_connections',
-    'webhook_signing_keys', 'event_processing', 'processing_outbox'
+    'webhook_signing_keys', 'event_processing', 'processing_outbox',
+    'domain_events', 'integration_outbox'
   ]) as required(name)
   where to_regclass(format('public.%I', required.name)) is null;
 
