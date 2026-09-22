@@ -21,6 +21,15 @@ begin
     raise exception 'legacy single-endpoint tenant constraint still exists';
   end if;
 
+  select count(*) into endpoint_count
+  from pg_indexes
+  where schemaname = 'public'
+    and tablename = 'webhook_endpoints'
+    and indexname = 'webhook_endpoints_legacy_tenant_unique';
+  if endpoint_count <> 1 then
+    raise exception 'legacy Kommo endpoint uniqueness is not enforced';
+  end if;
+
   select count(*) into active_key_count
   from pg_indexes
   where schemaname = 'public'

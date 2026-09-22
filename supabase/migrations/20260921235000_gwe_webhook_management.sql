@@ -3,6 +3,12 @@
 alter table public.webhook_endpoints
   drop constraint if exists webhook_endpoints_tenant_unique;
 
+-- Keep at most one legacy Kommo endpoint per tenant (connection_id is null).
+-- GWE connections have connection_id set and are therefore allowed to coexist.
+create unique index if not exists webhook_endpoints_legacy_tenant_unique
+  on public.webhook_endpoints (tenant_id)
+  where connection_id is null;
+
 create or replace function public.create_gwe_connection(
   p_tenant_id uuid,
   p_provider text,
