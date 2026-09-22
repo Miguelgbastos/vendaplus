@@ -85,6 +85,46 @@ begin
          where tenant_id = v_tenant and qualification = 'sql') <> 0.5000 then
     raise exception 'match rate was not calculated';
   end if;
+
+  insert into public.domain_events (
+    tenant_id, connection_id, lead_id, source_event_id, event_type,
+    event_key, payload, occurred_at
+  ) values (
+    v_tenant, v_connection, v_lead, v_source_event || '-not-compared',
+    'lead.lifecycle.sql_reached',
+    v_connection::text || ':' || v_source_event || '-not-compared:lead.lifecycle.sql',
+    jsonb_build_object('qualification', 'sql'),
+    now()
+  ) returning id into v_domain;
+
+  insert into public.integration_outbox (
+    tenant_id, domain_event_id, destination, event_type, event_key, payload
+  ) values (
+    v_tenant, v_domain, 'meta_capi', 'would_send_meta_event',
+    v_source_event || '-not-compared:meta',
+    jsonb_build_object('qualification', 'sql')
+  );
+
+  if (select not_compared from public.meta_shadow_parity_totals
+      where tenant_id = v_tenant and qualification = 'sql') <> 1
+     or (select missing_shadow from public.meta_shadow_parity_totals
+         where tenant_id = v_tenant and qualification = 'sql') <> 1
+     or (select comparable_events from public.meta_shadow_parity_totals
+         where tenant_id = v_tenant and qualification = 'sql') <> 1 then
+    raise exception 'not_compared was not classified independently';
+  end if;
+
+  if (select match_rate from public.meta_shadow_parity_totals
+      where tenant_id = v_tenant and qualification = 'sql') <> 1.0000
+     or (select coverage_rate from public.meta_shadow_parity_totals
+         where tenant_id = v_tenant and qualification = 'sql') <> 0.3333 then
+    raise exception 'not_compared changed the wrong rate';
+  end if;
+
+  if (select count(*) from public.meta_shadow_parity_summary
+      where tenant_id = v_tenant and domain_event_id = v_domain) <> 1 then
+    raise exception 'summary cardinality is not one row per domain event';
+  end if;
 end;
 $$;
 
