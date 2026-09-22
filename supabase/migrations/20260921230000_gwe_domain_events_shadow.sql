@@ -66,12 +66,14 @@ begin
   where l.id = new.lead_id;
 
   v_payload := jsonb_build_object(
-    'event_id', v_source_event_id,
+    'event_id', v_event_key,
+    'source_event_id', v_source_event_id,
     'event_type', 'lead.lifecycle.' || new.to_qualification::text || '_reached',
     'lead_id', new.lead_id,
     'qualification', new.to_qualification,
     'occurred_at', new.changed_at,
     'value', v_lead.price,
+    'currency', 'BRL',
     'attribution', jsonb_build_object(
       'utm_source', v_lead.utm_source,
       'utm_medium', v_lead.utm_medium,
