@@ -14,11 +14,12 @@ begin
   end if;
 
   select count(*) into endpoint_count
-  from pg_constraint
-  where conrelid = 'public.webhook_endpoints'::regclass
-    and conname = 'webhook_endpoints_tenant_unique';
-  if endpoint_count <> 0 then
-    raise exception 'legacy single-endpoint tenant constraint still exists';
+  from pg_indexes
+  where schemaname = 'public'
+    and tablename = 'webhook_endpoints'
+    and indexname = 'webhook_endpoints_legacy_tenant_unique';
+  if endpoint_count <> 1 then
+    raise exception 'legacy Kommo endpoint uniqueness is not enforced';
   end if;
 
   select count(*) into active_key_count
@@ -37,6 +38,7 @@ begin
       and p.prosecdef
       and pg_get_functiondef(p.oid) like '%auth.uid()%'
       and pg_get_functiondef(p.oid) like '%tenant_users%'
+      and pg_get_functiondef(p.oid) like '%is_active%'
   ) then
     raise exception 'create_gwe_connection must enforce auth membership internally';
   end if;
@@ -48,6 +50,7 @@ begin
       and p.prosecdef
       and pg_get_functiondef(p.oid) like '%auth.uid()%'
       and pg_get_functiondef(p.oid) like '%tenant_users%'
+      and pg_get_functiondef(p.oid) like '%is_active%'
   ) then
     raise exception 'rotate_gwe_webhook_signing_key must enforce auth membership internally';
   end if;

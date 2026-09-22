@@ -3,6 +3,10 @@
 alter table public.webhook_endpoints
   drop constraint if exists webhook_endpoints_tenant_unique;
 
+create unique index if not exists webhook_endpoints_legacy_tenant_unique
+  on public.webhook_endpoints (tenant_id)
+  where connection_id is null;
+
 create or replace function public.create_gwe_connection(
   p_tenant_id uuid,
   p_provider text,
@@ -37,9 +41,11 @@ begin
     or not exists (
       select 1
       from public.tenant_users tu
-      where tu.tenant_id = p_tenant_id
-        and tu.user_id = auth.uid()
-        and tu.role in ('owner', 'admin')
+    join public.tenants t on t.id = tu.tenant_id
+    where tu.tenant_id = p_tenant_id
+      and tu.user_id = auth.uid()
+      and tu.role in ('owner', 'admin')
+      and t.is_active
     ) then
     raise exception 'gwe_connection_forbidden' using errcode = '42501';
   end if;
@@ -95,9 +101,11 @@ begin
     or not exists (
       select 1
       from public.tenant_users tu
-      where tu.tenant_id = p_tenant_id
-        and tu.user_id = auth.uid()
-        and tu.role in ('owner', 'admin')
+    join public.tenants t on t.id = tu.tenant_id
+    where tu.tenant_id = p_tenant_id
+      and tu.user_id = auth.uid()
+      and tu.role in ('owner', 'admin')
+      and t.is_active
     ) then
     raise exception 'gwe_key_rotation_forbidden' using errcode = '42501';
   end if;
