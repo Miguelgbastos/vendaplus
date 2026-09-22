@@ -75,6 +75,12 @@ begin
       where domain_event_id = v_domain) <> 1 then
     raise exception 'unexpected comparator version';
   end if;
+  if (select legacy_payload_hash from public.meta_shadow_comparisons
+      where domain_event_id = v_domain) is null
+     or (select shadow_payload_hash from public.meta_shadow_comparisons
+         where domain_event_id = v_domain) is null then
+    raise exception 'comparison evidence hashes were not stored';
+  end if;
 
   update public.leads set price = 999 where id = v_lead;
   select * into v_result
@@ -86,6 +92,11 @@ begin
   if (select count(*) from public.meta_shadow_comparisons
       where domain_event_id = v_domain) <> 1 then
     raise exception 'comparison is not idempotent';
+  end if;
+  if (select (shadow_payload->>'value')::numeric
+      from public.meta_shadow_comparisons
+      where domain_event_id = v_domain) <> 125 then
+    raise exception 'shadow evidence snapshot was not preserved';
   end if;
 
   update public.jobs

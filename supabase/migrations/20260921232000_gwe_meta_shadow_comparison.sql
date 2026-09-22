@@ -6,6 +6,10 @@ create table public.meta_shadow_comparisons (
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   domain_event_id uuid references public.domain_events (id) on delete set null,
   legacy_job_id uuid references public.jobs (id) on delete set null,
+  legacy_payload jsonb,
+  legacy_payload_hash text,
+  shadow_payload jsonb,
+  shadow_payload_hash text,
   result text not null,
   differences jsonb not null default '{}'::jsonb,
   comparator_version smallint not null default 1,
@@ -72,10 +76,12 @@ begin
 
   if not found then
     insert into public.meta_shadow_comparisons (
-      tenant_id, domain_event_id, result, differences, comparator_version
+      tenant_id, domain_event_id, result, differences,
+      shadow_payload, shadow_payload_hash, comparator_version
     ) values (
       v_domain.tenant_id, v_domain.id, 'missing_shadow',
-      jsonb_build_object('reason', 'meta_shadow_outbox_missing'), 1
+      jsonb_build_object('reason', 'meta_shadow_outbox_missing'),
+      null, null, 1
     )
     on conflict (domain_event_id) do update
       set result = excluded.result,
@@ -192,16 +198,23 @@ begin
 
   insert into public.meta_shadow_comparisons (
     tenant_id, domain_event_id, legacy_job_id, result, differences,
+    legacy_payload, legacy_payload_hash, shadow_payload, shadow_payload_hash,
     comparator_version
   ) values (
     v_domain.tenant_id, v_domain.id,
     case when v_job.id is null then null else v_job.id end,
-    v_result, v_differences, 1
+    v_result, v_differences,
+    v_job.payload, case when v_job.id is null then null else md5(v_job.payload::text) end,
+    v_shadow.payload, md5(v_shadow.payload::text), 1
   )
   on conflict (domain_event_id) do update
     set legacy_job_id = excluded.legacy_job_id,
         result = excluded.result,
         differences = excluded.differences,
+        legacy_payload = excluded.legacy_payload,
+        legacy_payload_hash = excluded.legacy_payload_hash,
+        shadow_payload = excluded.shadow_payload,
+        shadow_payload_hash = excluded.shadow_payload_hash,
         comparator_version = excluded.comparator_version,
         compared_at = now()
   returning meta_shadow_comparisons.id,

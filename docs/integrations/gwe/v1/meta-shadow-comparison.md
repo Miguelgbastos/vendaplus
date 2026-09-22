@@ -2,7 +2,9 @@
 
 The comparison layer is observational. It does not claim jobs, publish the
 integration outbox, or call Meta. It materializes one result per shadow domain
-event in `meta_shadow_comparisons`.
+event in `meta_shadow_comparisons`. Each row also stores both payload snapshots and
+their MD5 fingerprints, so the result remains auditable even if a legacy job
+is later edited or removed.
 
 `compare_meta_shadow_event` resolves the corresponding legacy
 `send_meta_capi_event` job through `qualification_history_id`, then compares
