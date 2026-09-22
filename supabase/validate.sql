@@ -15,7 +15,7 @@ begin
     'tenant_invites', 'admin_audit_log', 'meta_capi_connections',
     'meta_capi_event_mappings', 'meta_capi_events', 'crm_connections',
     'webhook_signing_keys', 'event_processing', 'processing_outbox',
-    'domain_events', 'integration_outbox'
+    'domain_events', 'integration_outbox', 'meta_shadow_comparisons'
   ]) as required(name)
   where to_regclass(format('public.%I', required.name)) is null;
 
@@ -53,6 +53,10 @@ begin
 
   if to_regprocedure('public.fail_processing_outbox(uuid,text,text,integer)') is null then
     raise exception 'vendaplus_missing_function: fail_processing_outbox';
+  end if;
+
+  if to_regprocedure('public.compare_meta_shadow_event(uuid)') is null then
+    raise exception 'vendaplus_missing_function: compare_meta_shadow_event';
   end if;
 
   if to_regprocedure('public.dashboard_stage_counts(uuid,timestamp with time zone,timestamp with time zone,text,text,text,text,qualification_stage)') is null then
