@@ -58,8 +58,8 @@ begin
   end if;
 
   v_source_event_id := new.source_event_id;
-  v_event_key := v_source_event_id || ':lead.lifecycle.'
-    || new.to_qualification::text;
+  v_event_key := new.connection_id::text || ':' || v_source_event_id
+    || ':lead.lifecycle.' || new.to_qualification::text;
 
   select l.* into v_lead
   from public.leads l
