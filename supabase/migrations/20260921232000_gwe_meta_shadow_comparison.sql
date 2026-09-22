@@ -136,7 +136,7 @@ begin
 
     if v_mapping.id is null
        or v_job.payload->>'meta_event_name' is null
-       or v_job.payload->>'value' is null
+       or v_job.payload->'value' is null
        or v_job.payload->>'currency' is null
        or v_job.payload->'attribution' is null then
       v_result := 'legacy_evidence_missing';
