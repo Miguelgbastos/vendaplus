@@ -43,6 +43,12 @@ begin
   if to_regprocedure('public.ingest_crm_webhook_event(uuid,text,text,jsonb,text,jsonb,timestamp with time zone)') is null then
     raise exception 'vendaplus_missing_function: ingest_crm_webhook_event';
   end if;
+  if to_regprocedure('public.create_gwe_connection(uuid,text,text,integer,text,uuid,text,text,uuid)') is null then
+    raise exception 'vendaplus_missing_function: create_gwe_connection';
+  end if;
+  if to_regprocedure('public.rotate_gwe_webhook_signing_key(uuid,uuid,text,text,uuid)') is null then
+    raise exception 'vendaplus_missing_function: rotate_gwe_webhook_signing_key';
+  end if;
 
   if to_regprocedure('public.claim_processing_outbox(integer,text,integer)') is null then
     raise exception 'vendaplus_missing_function: claim_processing_outbox';
