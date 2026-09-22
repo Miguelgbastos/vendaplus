@@ -121,6 +121,7 @@ export default async function KommoPage({
           .from("webhook_endpoints")
           .select("token, is_active")
           .eq("tenant_id", membership.tenant.id)
+          .is("connection_id", null)
           .maybeSingle()
       ).data
     : null;
