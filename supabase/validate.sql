@@ -15,7 +15,8 @@ begin
     'tenant_invites', 'admin_audit_log', 'meta_capi_connections',
     'meta_capi_event_mappings', 'meta_capi_events', 'crm_connections',
     'webhook_signing_keys', 'event_processing', 'processing_outbox',
-    'domain_events', 'integration_outbox', 'meta_shadow_comparisons'
+    'domain_events', 'integration_outbox', 'meta_shadow_comparisons',
+    'meta_shadow_parity_summary', 'meta_shadow_parity_totals'
   ]) as required(name)
   where to_regclass(format('public.%I', required.name)) is null;
 
