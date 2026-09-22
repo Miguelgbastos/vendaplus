@@ -6,10 +6,12 @@ event in `meta_shadow_comparisons`.
 
 `compare_meta_shadow_event` resolves the corresponding legacy
 `send_meta_capi_event` job through `qualification_history_id`, then compares
-the semantic fields available before dispatch: qualification, event mapping,
-value, currency, attribution-ready payload, and event time. Legacy and shadow
-event IDs are not required to be equal.
+the semantic fields captured in both historical payloads: qualification, event
+mapping, value, currency, attribution, and event time. The legacy trigger
+records `event_time_source = qualification_history.changed_at`; this is the
+timestamp semantic used by both payloads. Legacy and shadow event IDs are not
+required to be equal.
 
-The shadow payload is read from `integration_outbox` as materialized at event
-creation. It is never rebuilt from the current lead, so later lead changes
-cannot rewrite historical comparison input.
+Both payloads are read as materialized at event creation. They are never
+rebuilt from the current lead, so later lead changes cannot rewrite historical
+comparison input.

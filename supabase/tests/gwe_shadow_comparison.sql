@@ -46,7 +46,18 @@ begin
         select changed_at from public.qualification_history where id = v_history
       ),
       'event_id', 'qh-' || v_history::text,
-      'qualification_history_id', v_history
+      'qualification_history_id', v_history,
+      'meta_event_name', 'Lead',
+      'value', 125,
+      'currency', 'BRL',
+      'event_time_source', 'qualification_history.changed_at',
+      'attribution', jsonb_build_object(
+        'utm_source', null,
+        'utm_medium', null,
+        'utm_campaign', null,
+        'utm_content', null,
+        'utm_term', null
+      )
     )
   );
 
@@ -60,13 +71,36 @@ begin
       where domain_event_id = v_domain) <> 1 then
     raise exception 'comparison was not materialized';
   end if;
+  if (select comparator_version from public.meta_shadow_comparisons
+      where domain_event_id = v_domain) <> 1 then
+    raise exception 'unexpected comparator version';
+  end if;
 
   update public.leads set price = 999 where id = v_lead;
   select * into v_result
   from public.compare_meta_shadow_event(v_domain);
+  if v_result.result <> 'matched' then
+    raise exception 'historical payload changed after lead update: % / %',
+      v_result.result, v_result.differences;
+  end if;
+  if (select count(*) from public.meta_shadow_comparisons
+      where domain_event_id = v_domain) <> 1 then
+    raise exception 'comparison is not idempotent';
+  end if;
+
+  update public.jobs
+  set payload = jsonb_set(payload, '{value}', '999'::jsonb)
+  where id = (
+    select legacy_job_id
+    from public.meta_shadow_comparisons
+    where domain_event_id = v_domain
+  );
+  select * into v_result
+  from public.compare_meta_shadow_event(v_domain);
   if v_result.result <> 'value_mismatch'
+     or (v_result.differences->>'legacy_value')::numeric <> 999
      or (v_result.differences->>'shadow_value')::numeric <> 125 then
-    raise exception 'expected materialized shadow value mismatch, got % / %',
+    raise exception 'expected historical value mismatch, got % / %',
       v_result.result, v_result.differences;
   end if;
 end;

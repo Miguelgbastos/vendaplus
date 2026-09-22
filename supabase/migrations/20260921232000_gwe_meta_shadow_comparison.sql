@@ -8,6 +8,7 @@ create table public.meta_shadow_comparisons (
   legacy_job_id uuid references public.jobs (id) on delete set null,
   result text not null,
   differences jsonb not null default '{}'::jsonb,
+  comparator_version smallint not null default 1,
   compared_at timestamptz not null default now(),
   constraint meta_shadow_comparisons_result_check check (
     result in (
@@ -15,11 +16,13 @@ create table public.meta_shadow_comparisons (
       'missing_legacy',
       'missing_shadow',
       'event_type_mismatch',
+      'qualification_mismatch',
       'value_mismatch',
       'currency_mismatch',
       'attribution_mismatch',
       'timestamp_mismatch',
-      'unexpected_duplicate'
+      'unexpected_duplicate',
+      'legacy_evidence_missing'
     )
   ),
   constraint meta_shadow_comparisons_domain_unique
@@ -46,8 +49,11 @@ declare
   v_differences jsonb := '{}'::jsonb;
   v_expected_event_type text;
   v_shadow_value numeric;
+  v_legacy_value numeric;
   v_shadow_currency text;
+  v_legacy_currency text;
   v_shadow_occurred_at timestamptz;
+  v_legacy_occurred_at timestamptz;
 begin
   select * into v_domain
   from public.domain_events
@@ -66,14 +72,15 @@ begin
 
   if not found then
     insert into public.meta_shadow_comparisons (
-      tenant_id, domain_event_id, result, differences
+      tenant_id, domain_event_id, result, differences, comparator_version
     ) values (
       v_domain.tenant_id, v_domain.id, 'missing_shadow',
-      jsonb_build_object('reason', 'meta_shadow_outbox_missing')
+      jsonb_build_object('reason', 'meta_shadow_outbox_missing'), 1
     )
     on conflict (domain_event_id) do update
       set result = excluded.result,
           differences = excluded.differences,
+          comparator_version = excluded.comparator_version,
           compared_at = now()
     returning meta_shadow_comparisons.id,
       meta_shadow_comparisons.result,
@@ -121,63 +128,81 @@ begin
 
     v_expected_event_type := coalesce(v_mapping.event_name, '');
     v_shadow_value := nullif(v_shadow.payload->>'value', '')::numeric;
+    v_legacy_value := nullif(v_job.payload->>'value', '')::numeric;
     v_shadow_currency := v_shadow.payload->>'currency';
+    v_legacy_currency := v_job.payload->>'currency';
     v_shadow_occurred_at := (v_shadow.payload->>'occurred_at')::timestamptz;
+    v_legacy_occurred_at := (v_job.payload->>'occurred_at')::timestamptz;
 
     if v_mapping.id is null
-       or v_shadow.payload->>'qualification' <> v_history.to_qualification::text
-       or v_shadow.payload->>'event_type' is null then
+       or v_job.payload->>'meta_event_name' is null
+       or v_job.payload->>'value' is null
+       or v_job.payload->>'currency' is null
+       or v_job.payload->'attribution' is null then
+      v_result := 'legacy_evidence_missing';
+      v_differences := jsonb_build_object(
+        'required_legacy_fields', jsonb_build_array(
+          'meta_event_name', 'value', 'currency', 'attribution'
+        )
+      );
+    elsif v_shadow.payload->>'qualification' <> v_job.payload->>'qualification' then
+      v_result := 'qualification_mismatch';
+      v_differences := jsonb_build_object(
+        'legacy_qualification', v_job.payload->>'qualification',
+        'shadow_qualification', v_shadow.payload->>'qualification'
+      );
+    elsif v_job.payload->>'meta_event_name' <> v_expected_event_type then
       v_result := 'event_type_mismatch';
       v_differences := jsonb_build_object(
         'expected_event_name', v_expected_event_type,
-        'shadow_event_type', v_shadow.payload->>'event_type'
+        'legacy_event_name', v_job.payload->>'meta_event_name'
       );
     elsif v_shadow_value is distinct from
-      nullif((select l.price::text from public.leads l where l.id = v_domain.lead_id), '')::numeric then
+      v_legacy_value then
       v_result := 'value_mismatch';
-      v_differences := jsonb_build_object('shadow_value', v_shadow_value);
-    elsif v_shadow_currency is distinct from v_mapping.currency then
+      v_differences := jsonb_build_object(
+        'legacy_value', v_legacy_value,
+        'shadow_value', v_shadow_value
+      );
+    elsif v_shadow_currency is distinct from v_legacy_currency then
       v_result := 'currency_mismatch';
       v_differences := jsonb_build_object(
+        'legacy_currency', v_legacy_currency,
         'shadow_currency', v_shadow_currency,
         'expected_currency', v_mapping.currency
       );
     elsif v_shadow.payload->'attribution' is distinct from (
-      select jsonb_build_object(
-        'utm_source', l.utm_source,
-        'utm_medium', l.utm_medium,
-        'utm_campaign', l.utm_campaign,
-        'utm_content', l.utm_content,
-        'utm_term', l.utm_term
-      )
-      from public.leads l
-      where l.id = v_domain.lead_id
+      v_job.payload->'attribution'
     ) then
       v_result := 'attribution_mismatch';
       v_differences := jsonb_build_object(
+        'legacy_attribution', v_job.payload->'attribution',
         'shadow_attribution', v_shadow.payload->'attribution'
       );
     elsif v_shadow_occurred_at is distinct from
-      (v_job.payload->>'occurred_at')::timestamptz then
+      v_legacy_occurred_at then
       v_result := 'timestamp_mismatch';
       v_differences := jsonb_build_object(
         'shadow_occurred_at', v_shadow_occurred_at,
-        'legacy_occurred_at', v_job.payload->>'occurred_at'
+        'legacy_occurred_at', v_legacy_occurred_at,
+        'timestamp_semantics', 'qualification_history.changed_at'
       );
     end if;
   end if;
 
   insert into public.meta_shadow_comparisons (
-    tenant_id, domain_event_id, legacy_job_id, result, differences
+    tenant_id, domain_event_id, legacy_job_id, result, differences,
+    comparator_version
   ) values (
     v_domain.tenant_id, v_domain.id,
     case when v_job.id is null then null else v_job.id end,
-    v_result, v_differences
+    v_result, v_differences, 1
   )
   on conflict (domain_event_id) do update
     set legacy_job_id = excluded.legacy_job_id,
         result = excluded.result,
         differences = excluded.differences,
+        comparator_version = excluded.comparator_version,
         compared_at = now()
   returning meta_shadow_comparisons.id,
     meta_shadow_comparisons.result,
