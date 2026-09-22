@@ -211,8 +211,12 @@ begin
     set legacy_job_id = excluded.legacy_job_id,
         result = excluded.result,
         differences = excluded.differences,
-        legacy_payload = excluded.legacy_payload,
-        legacy_payload_hash = excluded.legacy_payload_hash,
+        legacy_payload = coalesce(
+          excluded.legacy_payload, meta_shadow_comparisons.legacy_payload
+        ),
+        legacy_payload_hash = coalesce(
+          excluded.legacy_payload_hash, meta_shadow_comparisons.legacy_payload_hash
+        ),
         shadow_payload = excluded.shadow_payload,
         shadow_payload_hash = excluded.shadow_payload_hash,
         comparator_version = excluded.comparator_version,
