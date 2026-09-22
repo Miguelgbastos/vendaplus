@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
+import { getAppUrl } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { WebhooksManager } from "@/components/webhooks/webhooks-manager";
 
@@ -21,23 +22,38 @@ export default async function WebhooksSettingsPage() {
   if (error) throw new Error(`crm_connections_lookup_failed:${error.message}`);
 
   const connectionIds = (connections ?? []).map((row) => row.id);
-  const [{ data: endpoints }, { data: rawEvents }] = await Promise.all([
+  const [{ data: endpoints }, eventBundles] = await Promise.all([
     connectionIds.length
       ? admin.from("webhook_endpoints").select("id, connection_id, endpoint_public_id, is_active").in("connection_id", connectionIds)
       : Promise.resolve({ data: [] }),
-    connectionIds.length
-      ? admin.from("raw_events").select("id, connection_id, external_event_id, event_type, received_at, processed_at").in("connection_id", connectionIds).order("received_at", { ascending: false }).limit(50)
-      : Promise.resolve({ data: [] }),
+    Promise.all(
+      connectionIds.map(async (connectionId) => {
+        const [{ data: events, count: receivedCount }, { count: processedCount }] = await Promise.all([
+          admin
+            .from("raw_events")
+            .select("id, connection_id, external_event_id, event_type, received_at, processed_at", { count: "exact" })
+            .eq("connection_id", connectionId)
+            .order("received_at", { ascending: false })
+            .limit(5),
+          admin
+            .from("raw_events")
+            .select("id", { count: "exact", head: true })
+            .eq("connection_id", connectionId)
+            .not("processed_at", "is", null),
+        ]);
+        return {
+          connectionId,
+          events: events ?? [],
+          receivedCount: receivedCount ?? 0,
+          processedCount: processedCount ?? 0,
+        };
+      }),
+    ),
   ]);
 
   const endpointByConnection = new Map((endpoints ?? []).map((row) => [row.connection_id, row]));
-  const eventsByConnection = new Map<string, typeof rawEvents>();
-  for (const event of rawEvents ?? []) {
-    if (!event.connection_id) continue;
-    const list = eventsByConnection.get(event.connection_id) ?? [];
-    list.push(event);
-    eventsByConnection.set(event.connection_id, list);
-  }
+  const eventsByConnection = new Map(eventBundles.map((bundle) => [bundle.connectionId, bundle]));
+  const appUrl = getAppUrl();
 
   return (
     <div className="space-y-6">
@@ -46,11 +62,16 @@ export default async function WebhooksSettingsPage() {
         <p className="mt-1 text-sm text-muted-foreground">Gerencie conexões de CRM que enviam dados GWE v1 para o Venda+.</p>
       </div>
       {error ? <p className="rounded-lg alert-error px-3 py-2 text-sm">Não foi possível carregar as conexões.</p> : null}
-      <WebhooksManager tenantId={membership.tenant.id} initialConnections={(connections ?? []).map((connection) => ({
-        ...connection,
-        endpoint: endpointByConnection.get(connection.id) ?? null,
-        events: eventsByConnection.get(connection.id) ?? [],
-      }))} />
+      <WebhooksManager tenantId={membership.tenant.id} appUrl={appUrl} initialConnections={(connections ?? []).map((connection) => {
+        const bundle = eventsByConnection.get(connection.id);
+        return {
+          ...connection,
+          endpoint: endpointByConnection.get(connection.id) ?? null,
+          events: bundle?.events ?? [],
+          receivedCount: bundle?.receivedCount ?? 0,
+          processedCount: bundle?.processedCount ?? 0,
+        };
+      })} />
       <Card>
         <CardHeader>
           <CardTitle>Contrato GWE v1</CardTitle>

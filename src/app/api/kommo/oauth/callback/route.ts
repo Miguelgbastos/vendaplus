@@ -143,6 +143,7 @@ export async function GET(request: Request) {
       .from("webhook_endpoints")
       .select("id")
       .eq("tenant_id", payload.tenantId)
+      .is("connection_id", null)
       .maybeSingle();
 
     if (!existingWebhook) {

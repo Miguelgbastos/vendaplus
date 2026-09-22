@@ -22,7 +22,6 @@ create trigger crm_connections_set_updated_at
   for each row execute function private.set_updated_at();
 
 alter table public.webhook_endpoints
-  drop constraint if exists webhook_endpoints_tenant_unique,
   add column if not exists connection_id uuid
     references public.crm_connections (id) on delete cascade,
   add column if not exists endpoint_public_id uuid

@@ -1,5 +1,8 @@
 -- Atomic management operations for the GWE settings UI.
 
+alter table public.webhook_endpoints
+  drop constraint if exists webhook_endpoints_tenant_unique;
+
 create or replace function public.create_gwe_connection(
   p_tenant_id uuid,
   p_provider text,

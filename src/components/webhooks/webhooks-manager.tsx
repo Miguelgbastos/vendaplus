@@ -13,11 +13,12 @@ type Event = { id: string; external_event_id: string | null; event_type: string 
 type Connection = {
   id: string; name: string; provider: string; schema_version: number; is_active: boolean;
   endpoint: { endpoint_public_id: string | null; is_active: boolean } | null; events: Event[];
+  receivedCount: number; processedCount: number;
 };
 
 const PROVIDERS = [["gwe", "GWE / genérico"], ["hubspot", "HubSpot"], ["pipedrive", "Pipedrive"], ["rd_station", "RD Station"], ["generic", "Outro CRM"]] as const;
 
-export function WebhooksManager({ tenantId, initialConnections }: { tenantId: string; initialConnections: Connection[] }) {
+export function WebhooksManager({ tenantId, appUrl, initialConnections }: { tenantId: string; appUrl: string; initialConnections: Connection[] }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -82,20 +83,20 @@ export function WebhooksManager({ tenantId, initialConnections }: { tenantId: st
       ) : null}
       {initialConnections.length === 0 ? <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><Webhook className="h-8 w-8 text-primary" /><p className="font-medium">Nenhum webhook configurado</p><p className="text-sm text-muted-foreground">Crie um endpoint para começar a receber snapshots GWE v1.</p></CardContent></Card> : null}
       {initialConnections.map((connection) => (
-        <ConnectionCard key={connection.id} connection={connection} onToggle={() => toggle(connection)} onCopy={copy} onRotate={() => rotate(connection)} />
+        <ConnectionCard key={connection.id} appUrl={appUrl} connection={connection} onToggle={() => toggle(connection)} onCopy={copy} onRotate={() => rotate(connection)} />
       ))}
     </div>
   );
 }
 
-function ConnectionCard({ connection, onToggle, onCopy, onRotate }: { connection: Connection; onToggle: () => void; onCopy: (value: string) => Promise<void>; onRotate: (connection: Connection) => Promise<void> }) {
+function ConnectionCard({ appUrl, connection, onToggle, onCopy, onRotate }: { appUrl: string; connection: Connection; onToggle: () => void; onCopy: (value: string) => Promise<void>; onRotate: (connection: Connection) => Promise<void> }) {
   const endpointUrl = connection.endpoint?.endpoint_public_id
-    ? `${window.location.origin}/api/v1/webhooks/crm/${connection.endpoint.endpoint_public_id}`
+    ? `${appUrl}/api/v1/webhooks/crm/${connection.endpoint.endpoint_public_id}`
     : null;
   return (
         <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{connection.name}</CardTitle><CardDescription>{PROVIDERS.find(([value]) => value === connection.provider)?.[1] ?? connection.provider} · GWE v{connection.schema_version}</CardDescription></div><Badge className={connection.is_active ? "border-transparent bg-primary-soft text-primary" : ""}>{connection.is_active ? "Ativo" : "Inativo"}</Badge></div></CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 text-sm sm:grid-cols-3"><div><p className="text-muted-foreground">Eventos recebidos</p><p className="text-xl font-semibold">{connection.events.length}</p></div><div><p className="text-muted-foreground">Último recebimento</p><p>{connection.events[0] ? new Date(connection.events[0].received_at).toLocaleString("pt-BR") : "—"}</p></div><div><p className="text-muted-foreground">Processados</p><p className="text-xl font-semibold">{connection.events.filter((event) => event.processed_at).length}</p></div></div>
+            <div className="grid gap-3 text-sm sm:grid-cols-3"><div><p className="text-muted-foreground">Eventos recebidos</p><p className="text-xl font-semibold">{connection.receivedCount}</p></div><div><p className="text-muted-foreground">Último recebimento</p><p>{connection.events[0] ? new Date(connection.events[0].received_at).toLocaleString("pt-BR") : "—"}</p></div><div><p className="text-muted-foreground">Processados</p><p className="text-xl font-semibold">{connection.processedCount}</p></div></div>
             {endpointUrl ? <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs">{endpointUrl}</p> : null}
             <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={onToggle}><Power className="h-4 w-4" /> {connection.is_active ? "Desativar" : "Ativar"}</Button>{endpointUrl ? <Button variant="ghost" size="sm" onClick={() => onCopy(endpointUrl)}><Copy className="h-4 w-4" /> Copiar endpoint</Button> : null}<Button variant="ghost" size="sm" onClick={() => onRotate(connection)}>Rotacionar chave</Button></div>
             {connection.events.length ? <div className="space-y-2 border-t border-border pt-3"><p className="text-sm font-medium">Eventos recentes</p>{connection.events.slice(0, 5).map((event) => <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="font-mono text-xs">{event.external_event_id ?? event.id}</span><span className="text-muted-foreground">{event.event_type ?? "lead.snapshot"} · {new Date(event.received_at).toLocaleString("pt-BR")}</span><Badge>{event.processed_at ? "Processado" : "Recebido"}</Badge></div>)}</div> : null}
