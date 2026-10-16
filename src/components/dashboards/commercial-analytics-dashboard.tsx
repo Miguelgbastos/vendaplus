@@ -3,9 +3,14 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CircleDollarSign, Clock3, Goal, Trophy } from "lucide-react";
 import type { CommercialAnalytics } from "@/lib/dashboard-analytics";
-import { LOSS_PREVIOUS_STAGE_LABELS } from "@/lib/commercial-loss-intelligence";
 import { formatNumber } from "@/lib/utils";
 import { CHART_COLORS, ChartCard, EmptyChart, FiltersEmptyState, MetricCard, SampleNote, percentLabel } from "./analytics-ui";
+import {
+  LossStageReasonMatrixTable,
+  OwnerConversionTable,
+  RecentCommercialLeadsTable,
+  StagnantOpenTable,
+} from "./sortable-data-tables";
 
 const stageNames: Record<string, string> = { sql: "SQL", oportunidade: "Oportunidade", negociacao: "Negociação", venda: "Venda" };
 const dwellStageNames: Record<string, string> = { mql: "MQL", sal: "SAL", sql: "SQL", oportunidade: "Oportunidade", negociacao: "Negociação" };
@@ -33,12 +38,11 @@ export function CommercialAnalyticsDashboard({
     .map((row) => ({
       ...row,
       stage: dwellStageNames[row.stage] ?? row.stage,
-      medianCurrentDays: row.medianCurrentDays,
-      medianCycleDays: row.medianCycleDays,
+      medianCurrentDays: row.medianCurrentDays == null ? 0 : Math.round(row.medianCurrentDays),
+      medianCycleDays: row.medianCycleDays == null ? 0 : Math.round(row.medianCycleDays),
     }));
   const dwellIsEmpty = stageDwell.length === 0;
   const lossPreviousTotal = data.lossPreviousStage.reduce((sum, row) => sum + row.value, 0);
-  const ownerConversionRows = data.ownerConversion.slice(0, 12);
   const matrix = data.lossStageReasonMatrix;
   const matrixHasData = matrix.reasons.length > 0 && Object.values(matrix.matrix).some((row) =>
     Object.values(row).some((value) => value > 0),
@@ -68,8 +72,8 @@ export function CommercialAnalyticsDashboard({
                   <BarChart data={stageDwell} margin={{ left: -20, right: 10, top: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" />
                     <XAxis dataKey="stage" tickLine={false} axisLine={false} fontSize={11} />
-                    <YAxis tickLine={false} axisLine={false} fontSize={12} unit="d" />
-                    <Tooltip formatter={(value) => `${value ?? 0} dias`} />
+                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} fontSize={12} unit="d" />
+                    <Tooltip formatter={(value) => `${formatNumber(Math.round(Number(value ?? 0)))} dias`} />
                     <Legend verticalAlign="top" align="center" height={28} />
                     <Bar dataKey="medianCurrentDays" name="Parado agora (mediana)" fill={CHART_COLORS.amber} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="medianCycleDays" name="Ciclo até sair (mediana)" fill={CHART_COLORS.blue} radius={[4, 4, 0, 0]} />
@@ -261,36 +265,7 @@ export function CommercialAnalyticsDashboard({
         {!matrixHasData ? (
           <EmptyChart text="Sem perdas no período para montar a matriz." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="pb-3 pr-3 font-medium">Etapa anterior</th>
-                  {matrix.reasons.map((reason) => (
-                    <th key={reason} className="pb-3 px-2 font-medium">{reason}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {matrix.stages.map((stage) => (
-                  <tr key={stage} className="border-t">
-                    <td className="py-3 pr-3 font-medium">
-                      {matrix.stageLabels[stage] ??
-                        LOSS_PREVIOUS_STAGE_LABELS[
-                          stage as keyof typeof LOSS_PREVIOUS_STAGE_LABELS
-                        ] ??
-                        stage}
-                    </td>
-                    {matrix.reasons.map((reason) => (
-                      <td key={`${stage}-${reason}`} className="px-2 py-3 text-muted-foreground">
-                        {formatNumber(matrix.matrix[stage]?.[reason] ?? 0)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <LossStageReasonMatrixTable matrix={matrix} />
         )}
       </ChartCard>
 
@@ -301,34 +276,7 @@ export function CommercialAnalyticsDashboard({
         {data.stagnantOpen.length === 0 ? (
           <EmptyChart text="Nenhum lead comercial aberto parado há 3+ dias com first_seen no período/filtros." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="pb-3 font-medium">Responsável</th>
-                  <th className="pb-3 font-medium">Estágio</th>
-                  <th className="pb-3 text-right font-medium">3–6d</th>
-                  <th className="pb-3 text-right font-medium">7–14d</th>
-                  <th className="pb-3 text-right font-medium">15–29d</th>
-                  <th className="pb-3 text-right font-medium">30+</th>
-                  <th className="pb-3 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.stagnantOpen.slice(0, 40).map((row) => (
-                  <tr key={`${row.ownerId}-${row.stage}`} className="border-t">
-                    <td className="py-3 pr-4 font-medium">{row.ownerName}</td>
-                    <td className="py-3 pr-4">{row.stageLabel}</td>
-                    <td className="py-3 text-right text-muted-foreground">{formatNumber(row.bucket3)}</td>
-                    <td className="py-3 text-right text-muted-foreground">{formatNumber(row.bucket7)}</td>
-                    <td className="py-3 text-right text-muted-foreground">{formatNumber(row.bucket15)}</td>
-                    <td className="py-3 text-right font-medium text-destructive">{formatNumber(row.bucket30)}</td>
-                    <td className="py-3 text-right font-semibold">{formatNumber(row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <StagnantOpenTable rows={data.stagnantOpen} />
         )}
       </ChartCard>
 
@@ -336,40 +284,19 @@ export function CommercialAnalyticsDashboard({
         title="Conversão por responsável"
         description="Volumes SQL, oportunidade, negociação, venda e taxa SQL→Venda"
       >
-        {ownerConversionRows.length === 0 ? (
+        {data.ownerConversion.length === 0 ? (
           <EmptyChart />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="pb-3 font-medium">Responsável</th>
-                  <th className="pb-3 text-right font-medium">SQL</th>
-                  <th className="pb-3 text-right font-medium">Oportunidade</th>
-                  <th className="pb-3 text-right font-medium">Negociação</th>
-                  <th className="pb-3 text-right font-medium">Venda</th>
-                  <th className="pb-3 text-right font-medium">SQL→Venda</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ownerConversionRows.map((row) => (
-                  <tr key={row.ownerId || row.name} className="border-t">
-                    <td className="py-3 pr-4 font-medium">{row.name}</td>
-                    <td className="py-3 text-right">{formatNumber(row.sql)}</td>
-                    <td className="py-3 text-right text-muted-foreground">{formatNumber(row.oportunidade)}</td>
-                    <td className="py-3 text-right text-muted-foreground">{formatNumber(row.negociacao)}</td>
-                    <td className="py-3 text-right font-medium text-primary">{formatNumber(row.venda)}</td>
-                    <td className="py-3 text-right font-semibold">{percentLabel(row.sqlToVenda)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <OwnerConversionTable rows={data.ownerConversion} />
         )}
       </ChartCard>
 
       <ChartCard title="Leads comerciais recentes" description="Últimas atualizações a partir de SQL, com campanha e motivo de perda">
-        {data.recent.length === 0 ? <EmptyChart /> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-muted-foreground"><tr><th className="pb-3 font-medium">Lead</th><th className="pb-3 font-medium">Qualificação</th><th className="pb-3 font-medium">Campanha</th><th className="pb-3 font-medium">Motivo de perda</th><th className="pb-3 text-right font-medium">Atualizado</th></tr></thead><tbody>{data.recent.map((lead) => <tr key={lead.id} className="border-t"><td className="py-3 pr-4 font-medium">{lead.name}</td><td className="py-3 pr-4 uppercase text-primary">{lead.qualification ?? "—"}</td><td className="max-w-64 py-3 pr-4">{lead.campaign}</td><td className="py-3 pr-4 text-muted-foreground">{lead.lossReason ?? "—"}</td><td className="py-3 text-right text-muted-foreground">{new Date(lead.updatedAt).toLocaleDateString("pt-BR")}</td></tr>)}</tbody></table></div>}
+        {data.recent.length === 0 ? (
+          <EmptyChart />
+        ) : (
+          <RecentCommercialLeadsTable rows={data.recent} />
+        )}
       </ChartCard>
     </div>
   );

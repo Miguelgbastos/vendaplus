@@ -265,7 +265,7 @@ const STAGE_LABELS: Record<string, string> = {
   negociacao: "Negociação",
 };
 
-/** Priority table: one row per owner×stage, sorted by 30+ then 15/7/3. */
+/** One row per owner×stage, sorted A–Z by responsável then estágio. */
 export function buildStagnantPriorityTable(
   rows: Array<{ owner_id: string; stage: string; bucket: string; total: number }>,
   ownerNames: Readonly<Record<string, string>> = {},
@@ -296,11 +296,9 @@ export function buildStagnantPriorityTable(
   }
 
   return [...map.values()].sort((a, b) => {
-    if (b.bucket30 !== a.bucket30) return b.bucket30 - a.bucket30;
-    if (b.bucket15 !== a.bucket15) return b.bucket15 - a.bucket15;
-    if (b.bucket7 !== a.bucket7) return b.bucket7 - a.bucket7;
-    if (b.bucket3 !== a.bucket3) return b.bucket3 - a.bucket3;
-    return a.ownerName.localeCompare(b.ownerName, "pt-BR");
+    const byOwner = a.ownerName.localeCompare(b.ownerName, "pt-BR");
+    if (byOwner !== 0) return byOwner;
+    return a.stageLabel.localeCompare(b.stageLabel, "pt-BR");
   });
 }
 

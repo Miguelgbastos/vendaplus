@@ -212,21 +212,29 @@ describe("limitLossMatrixReasons", () => {
 });
 
 describe("buildStagnantPriorityTable + labels", () => {
-  it("usa nome Kommo com fallback #ID e ordena por 30+", () => {
+  it("usa nome Kommo com fallback #ID e ordena A–Z por responsável e estágio", () => {
     const rows = buildStagnantPriorityTable(
       [
         { owner_id: "10", stage: "sql", bucket: "3", total: 2 },
         { owner_id: "10", stage: "sql", bucket: "30+", total: 1 },
+        { owner_id: "10", stage: "oportunidade", bucket: "7", total: 1 },
         { owner_id: "99", stage: "negociacao", bucket: "7", total: 5 },
         { owner_id: "", stage: "oportunidade", bucket: "15", total: 1 },
       ],
-      { "10": "Ana Paula" },
+      { "10": "Ana Paula", "99": "Bruno" },
     );
 
-    assert.equal(rows[0].ownerName, "Ana Paula");
-    assert.equal(rows[0].bucket30, 1);
-    assert.equal(rows.find((r) => r.ownerId === "99")?.ownerName, "#99");
-    assert.equal(rows.find((r) => r.ownerId === "")?.ownerName, "Sem responsável");
+    assert.deepEqual(
+      rows.map((r) => `${r.ownerName}|${r.stageLabel}`),
+      [
+        "Ana Paula|Oportunidade",
+        "Ana Paula|SQL",
+        "Bruno|Negociação",
+        "Sem responsável|Oportunidade",
+      ],
+    );
+    assert.equal(rows[0].bucket30, 0);
+    assert.equal(rows[1].bucket30, 1);
   });
 });
 

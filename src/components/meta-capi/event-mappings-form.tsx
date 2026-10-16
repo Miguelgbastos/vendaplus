@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SortableTh } from "@/components/ui/sortable-th";
+import { useSortableTable } from "@/hooks/use-sortable-table";
 import type { QualificationStage } from "@/types/database";
 
 type Mapping = {
@@ -38,6 +40,16 @@ export function MetaCapiEventMappingsForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const { rows: sortedRows, headerProps } = useSortableTable(rows, {
+    qualification: {
+      type: "text",
+      value: (row) => QUALIFICATION_LABELS[row.qualification],
+    },
+    event_name: { type: "text", value: (row) => row.event_name },
+    include_value: { type: "boolean", value: (row) => row.include_value },
+    currency: { type: "text", value: (row) => row.currency },
+    is_active: { type: "boolean", value: (row) => row.is_active },
+  });
 
   function updateRow(qualification: QualificationStage, patch: Partial<Mapping>) {
     setRows((prev) =>
@@ -71,15 +83,25 @@ export function MetaCapiEventMappingsForm({
         <table className="w-full text-sm">
           <thead className="bg-muted text-muted-foreground">
             <tr>
-              <th className="px-3 py-2 text-left font-medium">Qualificação</th>
-              <th className="px-3 py-2 text-left font-medium">Evento CAPI</th>
-              <th className="px-3 py-2 text-left font-medium">Enviar valor</th>
-              <th className="px-3 py-2 text-left font-medium">Moeda</th>
-              <th className="px-3 py-2 text-left font-medium">Ativo</th>
+              <SortableTh className="px-3 py-2" {...headerProps("qualification")}>
+                Qualificação
+              </SortableTh>
+              <SortableTh className="px-3 py-2" {...headerProps("event_name")}>
+                Evento CAPI
+              </SortableTh>
+              <SortableTh className="px-3 py-2" {...headerProps("include_value")}>
+                Enviar valor
+              </SortableTh>
+              <SortableTh className="px-3 py-2" {...headerProps("currency")}>
+                Moeda
+              </SortableTh>
+              <SortableTh className="px-3 py-2" {...headerProps("is_active")}>
+                Ativo
+              </SortableTh>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {sortedRows.map((row) => (
               <tr key={row.qualification} className="border-t border-border">
                 <td className="px-3 py-2 text-foreground">
                   {QUALIFICATION_LABELS[row.qualification]}

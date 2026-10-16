@@ -27,6 +27,7 @@ import {
   SampleNote,
   percentLabel,
 } from "./analytics-ui";
+import { CampaignQualityTable } from "./sortable-data-tables";
 
 const stageNames: Record<string, string> = {
   mql: "MQL",
@@ -51,7 +52,7 @@ export function MarketingAnalyticsDashboard({
     ...item,
     date: new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
   }));
-  const campaignRows = data.campaigns.slice(0, 15);
+  const campaignRows = data.campaigns;
 
   return (
     <div className="space-y-6">
@@ -123,12 +124,11 @@ export function MarketingAnalyticsDashboard({
 
       <ChartCard title="Campanhas por qualidade" description="Volume e avanço no funil cruzados pela utm_campaign">
         <SampleNote />
-        {campaignRows.length === 0 ? <div className="mt-4"><EmptyChart /></div> : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="text-muted-foreground"><tr><th className="pb-3 font-medium">Campanha</th><th className="pb-3 text-right font-medium">Leads</th><th className="pb-3 text-right font-medium">MQL</th><th className="pb-3 text-right font-medium">SAL</th><th className="pb-3 text-right font-medium">SQL</th><th className="pb-3 text-right font-medium">Oportunidades</th><th className="pb-3 text-right font-medium">Lead → SQL</th><th className="pb-3 text-right font-medium">Lead → Oport.</th></tr></thead>
-              <tbody>{campaignRows.map((row) => <tr key={row.name} className="border-t"><td className="max-w-72 py-3 pr-4 font-medium"><span>{row.name}</span>{row.leads < 10 && <span className="ml-2 rounded-full bg-warning-foreground px-2 py-0.5 text-[10px] font-semibold text-warning">amostra pequena</span>}</td><td className="py-3 text-right">{row.leads}</td><td className="py-3 text-right">{row.mql}</td><td className="py-3 text-right">{row.sal}</td><td className="py-3 text-right">{row.sql}</td><td className="py-3 text-right">{row.oportunidade}</td><td className="py-3 text-right font-medium text-primary">{percentLabel(row.leadToSql)}</td><td className="py-3 text-right font-medium text-primary">{percentLabel(row.leadToOpportunity)}</td></tr>)}</tbody>
-            </table>
+        {campaignRows.length === 0 ? (
+          <div className="mt-4"><EmptyChart /></div>
+        ) : (
+          <div className="mt-4">
+            <CampaignQualityTable rows={campaignRows} />
           </div>
         )}
       </ChartCard>
