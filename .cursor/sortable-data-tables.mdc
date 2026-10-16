@@ -1,0 +1,69 @@
+---
+description: Padroniza a ordenação de colunas em todas as tabelas do VendaPlus
+alwaysApply: true
+---
+
+# VendaPlus — Sortable Data Tables
+
+> Cópia canônica também em `.cursor/rules/sortable-data-tables.mdc`.
+
+## Objetivo
+
+Todas as visualizações tabulares do VendaPlus devem oferecer
+ordenação individual por coluna.
+
+Esta regra se aplica a:
+- Dashboards
+- Relatórios
+- Análises de campanhas
+- Funis comerciais
+- Listagens de leads
+- Tabelas de desempenho
+- Qualquer componente que apresente dados em linhas e colunas
+
+## 1. Comportamento obrigatório
+
+Cada cabeçalho de coluna ordenável deve apresentar um
+indicador visual de ordenação.
+
+Estados:
+
+- ↕ Sem ordenação
+- ↑ Ascendente
+- ↓ Descendente
+
+Ao clicar no cabeçalho, alternar entre:
+
+Sem ordenação → Ascendente → Descendente → Sem ordenação.
+
+A coluna atualmente ordenada deve apresentar destaque visual.
+
+## 2. Tipos de dados
+
+A ordenação deve respeitar o tipo de cada coluna:
+
+- Texto: ordem alfabética usando locale pt-BR.
+- Número: comparação numérica real.
+- Percentual: comparação pelo valor numérico.
+- Moeda: comparação pelo valor monetário.
+- Data: comparação cronológica.
+- Data e hora: comparação por timestamp.
+
+Nunca ordenar números ou percentuais como strings.
+
+## 3. Componente reutilizável
+
+Priorizar um componente global de tabela.
+
+Não implementar lógica de ordenação duplicada
+em diferentes páginas.
+
+Implementação atual:
+- `src/lib/sortable-table.ts` — ciclo, comparadores e `sortRows`
+- `src/hooks/use-sortable-table.ts` — estado de ordenação
+- `src/components/ui/sortable-th.tsx` — cabeçalho com indicador e `aria-sort`
+- `src/components/dashboards/sortable-data-tables.tsx` — tabelas dos dashboards
+
+## 4–7
+
+Ver `.cursor/rules/sortable-data-tables.mdc` (paginação, UX, preservação e aplicação).
