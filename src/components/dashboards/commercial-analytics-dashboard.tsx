@@ -33,8 +33,8 @@ export function CommercialAnalyticsDashboard({
     .map((row) => ({
       ...row,
       stage: dwellStageNames[row.stage] ?? row.stage,
-      medianCurrentDays: row.medianCurrentDays,
-      medianCycleDays: row.medianCycleDays,
+      medianCurrentDays: Math.round(row.medianCurrentDays),
+      medianCycleDays: Math.round(row.medianCycleDays),
     }));
   const dwellIsEmpty = stageDwell.length === 0;
   const lossPreviousTotal = data.lossPreviousStage.reduce((sum, row) => sum + row.value, 0);
@@ -68,8 +68,8 @@ export function CommercialAnalyticsDashboard({
                   <BarChart data={stageDwell} margin={{ left: -20, right: 10, top: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e3dc" />
                     <XAxis dataKey="stage" tickLine={false} axisLine={false} fontSize={11} />
-                    <YAxis tickLine={false} axisLine={false} fontSize={12} unit="d" />
-                    <Tooltip formatter={(value) => `${value ?? 0} dias`} />
+                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} fontSize={12} unit="d" />
+                    <Tooltip formatter={(value) => `${formatNumber(Math.round(Number(value ?? 0)))} dias`} />
                     <Legend verticalAlign="top" align="center" height={28} />
                     <Bar dataKey="medianCurrentDays" name="Parado agora (mediana)" fill={CHART_COLORS.amber} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="medianCycleDays" name="Ciclo até sair (mediana)" fill={CHART_COLORS.blue} radius={[4, 4, 0, 0]} />
