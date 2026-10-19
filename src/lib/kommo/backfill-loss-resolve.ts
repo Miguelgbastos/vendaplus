@@ -46,6 +46,20 @@ export function backfillChangedAtAfterLastPerda(
   return preferred;
 }
 
+/** Marker changed_at stays behind the last perda so the chart is unchanged. */
+export function unresolvedMarkerChangedAt(
+  lastPerdaChangedAt: string | null | undefined,
+  fallbackChangedAt: string | null | undefined,
+): string {
+  if (lastPerdaChangedAt) {
+    const lastMs = Date.parse(lastPerdaChangedAt);
+    if (Number.isFinite(lastMs)) {
+      return new Date(lastMs - 1000).toISOString();
+    }
+  }
+  return fallbackChangedAt ?? new Date().toISOString();
+}
+
 /** Highest commercial milestone present on the lead card / custom fields. */
 export function commercialStageFromMilestones(
   customFields: Record<string, unknown> | null | undefined,

@@ -5,8 +5,28 @@ import {
   commercialStageFromMilestones,
   previousCommercialStageFromEvents,
   resolveQualificationFromStatusId,
+  unresolvedMarkerChangedAt,
 } from "./backfill-loss-resolve.ts";
 import { KOMMO_STATUS_LOST } from "./normalize.ts";
+
+describe("unresolvedMarkerChangedAt", () => {
+  it("fica 1s antes da última perda para não alterar o gráfico", () => {
+    assert.equal(
+      unresolvedMarkerChangedAt(
+        "2026-09-28T20:05:07.177Z",
+        "2026-09-28T20:05:00.000Z",
+      ),
+      "2026-09-28T20:05:06.177Z",
+    );
+  });
+
+  it("usa fallback quando não há perda anterior", () => {
+    assert.equal(
+      unresolvedMarkerChangedAt(null, "2026-09-28T20:05:00.000Z"),
+      "2026-09-28T20:05:00.000Z",
+    );
+  });
+});
 
 describe("backfillChangedAtAfterLastPerda", () => {
   it("mantém preferred quando já é depois da última perda", () => {
