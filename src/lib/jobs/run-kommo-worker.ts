@@ -49,6 +49,8 @@ export async function runKommoWorker(options?: {
         await processMetaCapiJob(job);
       } else if (job.job_type === "backfill_kommo_loss_history") {
         await processBackfillLossHistoryJob(job);
+        // Extra spacing between backfill jobs (Kommo hard limit: 7 req/s).
+        await new Promise((resolve) => setTimeout(resolve, 250));
       }
       results.push({ id: job.id, ok: true });
     } catch (err) {
