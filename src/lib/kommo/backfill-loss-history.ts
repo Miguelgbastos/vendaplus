@@ -12,6 +12,7 @@ import {
   commercialStageFromMilestones,
   isCommercialPriorStage,
   previousCommercialStageFromEvents,
+  unresolvedMarkerChangedAt,
   type CommercialPriorStage,
 } from "@/lib/kommo/backfill-loss-resolve";
 import type { FieldMapping } from "@/types/database";
@@ -22,6 +23,7 @@ export {
   isCommercialPriorStage,
   previousCommercialStageFromEvents,
   resolveQualificationFromStatusId,
+  unresolvedMarkerChangedAt,
 } from "@/lib/kommo/backfill-loss-resolve";
 
 type BackfillJob = {
@@ -31,6 +33,8 @@ type BackfillJob = {
   attempts: number;
   max_attempts: number;
 };
+
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 const statusNameCache = new Map<string, Record<string, string>>();
 
@@ -76,14 +80,21 @@ export async function processBackfillLossHistoryJob(
     .eq("to_qualification", "perda")
     .maybeSingle();
 
-  if (isCommercialPriorStage(existingBackfill?.from_qualification)) {
+  // Any prior attempt (resolved or unresolved) must not hit Kommo again.
+  if (existingBackfill) {
     await markJob(admin, job.id, "completed");
-    return { ok: true, reason: "already_backfilled" };
+    return {
+      ok: true,
+      reason: isCommercialPriorStage(existingBackfill.from_qualification)
+        ? "already_backfilled"
+        : "already_attempted",
+    };
   }
 
   let resolved: CommercialPriorStage | null = null;
   let changedAt: string | null = lead.closed_at;
-  let resolution: "db_milestones" | "events" | "milestones" | "none" = "none";
+  let resolution: "db_milestones" | "events" | "milestones" | "unresolved" =
+    "unresolved";
 
   // Prefer local milestones first to stay under Kommo's 7 req/s limit.
   const dbFields =
@@ -130,15 +141,7 @@ export async function processBackfillLossHistoryJob(
     if (resolved) resolution = "milestones";
   }
 
-  if (!resolved) {
-    await markJob(admin, job.id, "completed");
-    return { ok: true, reason: "unresolved" };
-  }
-
-  // dashboard_loss_events_deduped picks DISTINCT ON lead_id ORDER BY changed_at DESC.
-  // Webhook "kommo" perda rows often land a few ms after the real transition; bump
-  // backfill changed_at so it becomes the authoritative last perda for the chart.
-  const lastPerdaQuery = admin
+  const { data: lastPerda } = await admin
     .from("qualification_history")
     .select("id, changed_at")
     .eq("tenant_id", job.tenant_id)
@@ -146,11 +149,36 @@ export async function processBackfillLossHistoryJob(
     .eq("to_qualification", "perda")
     .order("changed_at", { ascending: false })
     .order("id", { ascending: false })
-    .limit(1);
-  const { data: lastPerda } = existingBackfill?.id
-    ? await lastPerdaQuery.neq("id", existingBackfill.id).maybeSingle()
-    : await lastPerdaQuery.maybeSingle();
+    .limit(1)
+    .maybeSingle();
 
+  if (!resolved) {
+    const { error } = await admin.from("qualification_history").insert({
+      tenant_id: job.tenant_id,
+      lead_id: leadId,
+      from_qualification: null,
+      to_qualification: "perda",
+      source: "kommo_backfill",
+      changed_at: unresolvedMarkerChangedAt(
+        lastPerda?.changed_at,
+        lead.closed_at,
+      ),
+      metadata: {
+        backfill: true,
+        resolution: "unresolved",
+        kommo_lead_id: kommoLeadId,
+      },
+    });
+    if (error && error.code !== "23505") {
+      throw new Error(error.message);
+    }
+    await markJob(admin, job.id, "completed");
+    return { ok: true, reason: "unresolved" };
+  }
+
+  // dashboard_loss_events_deduped picks DISTINCT ON lead_id ORDER BY changed_at DESC.
+  // Webhook "kommo" perda rows often land a few ms after the real transition; bump
+  // backfill changed_at so it becomes the authoritative last perda for the chart.
   const writeChangedAt = backfillChangedAtAfterLastPerda(
     changedAt ?? lead.closed_at,
     lastPerda?.changed_at,
@@ -170,26 +198,13 @@ export async function processBackfillLossHistoryJob(
     },
   };
 
-  if (existingBackfill?.id) {
-    const { error } = await admin
-      .from("qualification_history")
-      .update({
-        from_qualification: row.from_qualification,
-        changed_at: row.changed_at,
-        metadata: row.metadata,
-      })
-      .eq("id", existingBackfill.id)
-      .eq("tenant_id", job.tenant_id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await admin.from("qualification_history").insert(row);
-    if (error) {
-      if (error.code === "23505") {
-        await markJob(admin, job.id, "completed");
-        return { ok: true, reason: "duplicate" };
-      }
-      throw new Error(error.message);
+  const { error } = await admin.from("qualification_history").insert(row);
+  if (error) {
+    if (error.code === "23505") {
+      await markJob(admin, job.id, "completed");
+      return { ok: true, reason: "duplicate" };
     }
+    throw new Error(error.message);
   }
 
   try {
@@ -203,7 +218,7 @@ export async function processBackfillLossHistoryJob(
 }
 
 async function markJob(
-  admin: ReturnType<typeof createAdminClient>,
+  admin: AdminClient,
   jobId: string,
   status: "completed" | "failed",
   lastError?: string,
