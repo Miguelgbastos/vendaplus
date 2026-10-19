@@ -8,6 +8,7 @@ import {
 } from "@/lib/kommo/client";
 import { normalizeKommoLead } from "@/lib/kommo/normalize";
 import {
+  backfillChangedAtAfterLastPerda,
   commercialStageFromMilestones,
   isCommercialPriorStage,
   previousCommercialStageFromEvents,
@@ -16,6 +17,7 @@ import {
 import type { FieldMapping } from "@/types/database";
 
 export {
+  backfillChangedAtAfterLastPerda,
   commercialStageFromMilestones,
   isCommercialPriorStage,
   previousCommercialStageFromEvents,
@@ -133,13 +135,34 @@ export async function processBackfillLossHistoryJob(
     return { ok: true, reason: "unresolved" };
   }
 
+  // dashboard_loss_events_deduped picks DISTINCT ON lead_id ORDER BY changed_at DESC.
+  // Webhook "kommo" perda rows often land a few ms after the real transition; bump
+  // backfill changed_at so it becomes the authoritative last perda for the chart.
+  const lastPerdaQuery = admin
+    .from("qualification_history")
+    .select("id, changed_at")
+    .eq("tenant_id", job.tenant_id)
+    .eq("lead_id", leadId)
+    .eq("to_qualification", "perda")
+    .order("changed_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1);
+  const { data: lastPerda } = existingBackfill?.id
+    ? await lastPerdaQuery.neq("id", existingBackfill.id).maybeSingle()
+    : await lastPerdaQuery.maybeSingle();
+
+  const writeChangedAt = backfillChangedAtAfterLastPerda(
+    changedAt ?? lead.closed_at,
+    lastPerda?.changed_at,
+  );
+
   const row = {
     tenant_id: job.tenant_id,
     lead_id: leadId,
     from_qualification: resolved,
     to_qualification: "perda" as const,
     source: "kommo_backfill",
-    changed_at: changedAt ?? new Date().toISOString(),
+    changed_at: writeChangedAt,
     metadata: {
       backfill: true,
       resolution,

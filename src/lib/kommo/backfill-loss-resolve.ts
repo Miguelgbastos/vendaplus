@@ -30,6 +30,22 @@ export function isCommercialPriorStage(
   return value === "sql" || value === "oportunidade" || value === "negociacao";
 }
 
+/** Ensure backfill row wins dashboard DISTINCT ON (... ORDER BY changed_at DESC). */
+export function backfillChangedAtAfterLastPerda(
+  preferredChangedAt: string | null | undefined,
+  lastPerdaChangedAt: string | null | undefined,
+): string {
+  const preferred = preferredChangedAt ?? new Date().toISOString();
+  if (!lastPerdaChangedAt) return preferred;
+  const lastMs = Date.parse(lastPerdaChangedAt);
+  const preferredMs = Date.parse(preferred);
+  if (!Number.isFinite(lastMs)) return preferred;
+  if (!Number.isFinite(preferredMs) || preferredMs <= lastMs) {
+    return new Date(lastMs + 1000).toISOString();
+  }
+  return preferred;
+}
+
 /** Highest commercial milestone present on the lead card / custom fields. */
 export function commercialStageFromMilestones(
   customFields: Record<string, unknown> | null | undefined,
