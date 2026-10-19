@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { processBackfillLossHistoryJob } from "@/lib/kommo/backfill-loss-history";
 import { failJob, processKommoJob } from "@/lib/kommo/process";
 import { processMetaCapiJob } from "@/lib/meta-capi/process";
 
@@ -24,7 +25,11 @@ export async function runKommoWorker(options?: {
   const { data: jobs, error } = await admin.rpc("claim_jobs", {
     p_limit: limit,
     p_worker_id: workerId,
-    p_job_types: ["process_kommo_event", "send_meta_capi_event"],
+    p_job_types: [
+      "process_kommo_event",
+      "send_meta_capi_event",
+      "backfill_kommo_loss_history",
+    ],
     p_tenant_id: options?.tenantId ?? null,
     p_lease_seconds: options?.leaseSeconds ?? 300,
   });
@@ -42,6 +47,8 @@ export async function runKommoWorker(options?: {
         await processKommoJob(job);
       } else if (job.job_type === "send_meta_capi_event") {
         await processMetaCapiJob(job);
+      } else if (job.job_type === "backfill_kommo_loss_history") {
+        await processBackfillLossHistoryJob(job);
       }
       results.push({ id: job.id, ok: true });
     } catch (err) {

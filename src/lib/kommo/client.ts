@@ -311,6 +311,60 @@ export async function fetchKommoLead(tenantId: string, leadId: string) {
   return data as unknown;
 }
 
+export type KommoLeadStatusEvent = {
+  id: string;
+  type: string;
+  entity_id: number;
+  created_at: number;
+  value_before?: Array<{ lead_status?: { id?: number; pipeline_id?: number } }>;
+  value_after?: Array<{ lead_status?: { id?: number; pipeline_id?: number } }>;
+};
+
+/** Status-change timeline for one lead (newest first when Kommo returns that order). */
+export async function fetchKommoLeadStatusEvents(
+  tenantId: string,
+  leadId: string,
+): Promise<KommoLeadStatusEvent[]> {
+  if (!/^\d+$/.test(leadId) || leadId === "0") {
+    throw new Error("kommo_invalid_lead_id");
+  }
+  const params = new URLSearchParams({
+    "filter[entity]": "lead",
+    "filter[entity_id]": leadId,
+    "filter[type]": "lead_status_changed",
+    limit: "50",
+  });
+  const data = await kommoFetch<{
+    _embedded?: { events?: KommoLeadStatusEvent[] };
+  }>(tenantId, `/api/v4/events?${params.toString()}`);
+  return Array.isArray(data._embedded?.events) ? data._embedded.events : [];
+}
+
+/** Map status_id → pipeline status name for qualification alias matching. */
+export async function fetchKommoStatusNameById(
+  tenantId: string,
+): Promise<Record<string, string>> {
+  const data = await kommoFetch<{
+    _embedded?: {
+      pipelines?: Array<{
+        _embedded?: {
+          statuses?: Array<{ id?: number | string; name?: string }>;
+        };
+      }>;
+    };
+  }>(tenantId, "/api/v4/leads/pipelines");
+
+  const map: Record<string, string> = {};
+  for (const pipeline of data._embedded?.pipelines ?? []) {
+    for (const status of pipeline._embedded?.statuses ?? []) {
+      const id = status.id != null ? String(status.id) : "";
+      const name = status.name?.trim();
+      if (id && name) map[id] = name;
+    }
+  }
+  return map;
+}
+
 export async function fetchKommoAccount(tenantId: string) {
   return kommoFetch<{
     id?: number;
