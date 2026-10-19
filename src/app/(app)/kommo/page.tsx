@@ -7,6 +7,7 @@ import { KommoAuthorizeButton } from "@/components/kommo/authorize-button";
 import { KommoStepper } from "@/components/kommo/stepper";
 import { WebhookSetup } from "@/components/kommo/webhook-setup";
 import { SyncKommoUsersButton } from "@/components/kommo/sync-users-button";
+import { BackfillLossHistoryButton } from "@/components/kommo/backfill-loss-history-button";
 import { canManageTenant, getActiveTenant, requireUser } from "@/lib/auth";
 import { getAppUrl, getKommoRedirectUri } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -237,10 +238,22 @@ export default async function KommoPage({
               </span>
             </p>
             {isAdmin ? (
-              <SyncKommoUsersButton
-                tenantId={membership.tenant.id}
-                disabled={connection?.status !== "connected"}
-              />
+              <div className="flex flex-wrap gap-3">
+                <SyncKommoUsersButton
+                  tenantId={membership.tenant.id}
+                  disabled={connection?.status !== "connected"}
+                />
+                <BackfillLossHistoryButton
+                  tenantId={membership.tenant.id}
+                  disabled={connection?.status !== "connected"}
+                />
+              </div>
+            ) : null}
+            {isAdmin ? (
+              <p className="text-xs text-muted-foreground">
+                “Preencher histórico de perdas” busca na Kommo a etapa anterior dos leads
+                classificados como Sem histórico e grava no banco (lote de até 50 por clique).
+              </p>
             ) : null}
             {friendlyLastError(connection?.last_error) ? (
               <p className="text-destructive">
