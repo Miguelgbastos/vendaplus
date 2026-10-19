@@ -1,11 +1,34 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  backfillChangedAtAfterLastPerda,
   commercialStageFromMilestones,
   previousCommercialStageFromEvents,
   resolveQualificationFromStatusId,
 } from "./backfill-loss-resolve.ts";
 import { KOMMO_STATUS_LOST } from "./normalize.ts";
+
+describe("backfillChangedAtAfterLastPerda", () => {
+  it("mantém preferred quando já é depois da última perda", () => {
+    assert.equal(
+      backfillChangedAtAfterLastPerda(
+        "2026-09-28T20:05:10.000Z",
+        "2026-09-28T20:05:07.000Z",
+      ),
+      "2026-09-28T20:05:10.000Z",
+    );
+  });
+
+  it("adianta 1s quando preferred empataria ou perderia no DISTINCT ON", () => {
+    assert.equal(
+      backfillChangedAtAfterLastPerda(
+        "2026-09-28T20:05:07.000Z",
+        "2026-09-28T20:05:07.177Z",
+      ),
+      "2026-09-28T20:05:08.177Z",
+    );
+  });
+});
 
 describe("commercialStageFromMilestones", () => {
   it("escolhe o estágio comercial mais avançado", () => {
