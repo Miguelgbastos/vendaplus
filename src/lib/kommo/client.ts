@@ -273,6 +273,31 @@ export async function getValidAccessToken(tenantId: string): Promise<{
   };
 }
 
+/** Kommo docs: max 7 req/s; stay under to avoid 429 and eventual IP 403. */
+const KOMMO_MAX_REQUESTS_PER_SEC = 5;
+const kommoRequestTimes = new Map<string, number[]>();
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForKommoRateLimit(tenantId: string) {
+  const windowMs = 1000;
+  for (;;) {
+    const now = Date.now();
+    const recent = (kommoRequestTimes.get(tenantId) ?? []).filter(
+      (ts) => now - ts < windowMs,
+    );
+    if (recent.length < KOMMO_MAX_REQUESTS_PER_SEC) {
+      recent.push(now);
+      kommoRequestTimes.set(tenantId, recent);
+      return;
+    }
+    const waitMs = Math.max(20, windowMs - (now - recent[0]) + 5);
+    await sleep(waitMs);
+  }
+}
+
 export async function kommoFetch<T>(
   tenantId: string,
   path: string,
@@ -280,23 +305,36 @@ export async function kommoFetch<T>(
 ): Promise<T> {
   const { accessToken, subdomain } = await getValidAccessToken(tenantId);
   const url = buildKommoApiUrl(subdomain, path);
+  const maxAttempts = 4;
 
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await waitForKommoRateLimit(tenantId);
 
-  if (!res.ok) {
-    await res.text().catch(() => "");
-    throw new Error(`Kommo API ${res.status}`);
+    const res = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+    });
+
+    if (res.status === 429 && attempt < maxAttempts - 1) {
+      await res.text().catch(() => "");
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+
+    if (!res.ok) {
+      await res.text().catch(() => "");
+      throw new Error(`Kommo API ${res.status}`);
+    }
+
+    if (res.status === 204) return {} as T;
+    return (await res.json()) as T;
   }
 
-  if (res.status === 204) return {} as T;
-  return (await res.json()) as T;
+  throw new Error("Kommo API 429");
 }
 
 export async function fetchKommoLead(tenantId: string, leadId: string) {

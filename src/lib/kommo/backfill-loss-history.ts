@@ -79,29 +79,35 @@ export async function processBackfillLossHistoryJob(
     return { ok: true, reason: "already_backfilled" };
   }
 
-  const statusNames = await statusNamesForTenant(job.tenant_id);
   let resolved: CommercialPriorStage | null = null;
   let changedAt: string | null = lead.closed_at;
-  let resolution: "events" | "milestones" | "none" = "none";
+  let resolution: "db_milestones" | "events" | "milestones" | "none" = "none";
 
-  try {
-    const events = await fetchKommoLeadStatusEvents(job.tenant_id, kommoLeadId);
-    const fromEvents = previousCommercialStageFromEvents(events, statusNames);
-    if (fromEvents) {
-      resolved = fromEvents.stage;
-      changedAt = fromEvents.changedAt ?? lead.closed_at;
-      resolution = "events";
+  // Prefer local milestones first to stay under Kommo's 7 req/s limit.
+  const dbFields =
+    lead.custom_fields && typeof lead.custom_fields === "object"
+      ? (lead.custom_fields as Record<string, unknown>)
+      : {};
+  resolved = commercialStageFromMilestones(dbFields);
+  if (resolved) resolution = "db_milestones";
+
+  if (!resolved) {
+    try {
+      const statusNames = await statusNamesForTenant(job.tenant_id);
+      const events = await fetchKommoLeadStatusEvents(job.tenant_id, kommoLeadId);
+      const fromEvents = previousCommercialStageFromEvents(events, statusNames);
+      if (fromEvents) {
+        resolved = fromEvents.stage;
+        changedAt = fromEvents.changedAt ?? lead.closed_at;
+        resolution = "events";
+      }
+    } catch {
+      // Fall through to GET lead + milestones.
     }
-  } catch {
-    // Fall through to milestones / GET lead.
   }
 
   if (!resolved) {
-    let customFields =
-      lead.custom_fields && typeof lead.custom_fields === "object"
-        ? (lead.custom_fields as Record<string, unknown>)
-        : {};
-
+    let customFields = dbFields;
     try {
       const { data: mappings } = await admin
         .from("field_mappings")
