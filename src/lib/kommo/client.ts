@@ -275,13 +275,42 @@ export async function getValidAccessToken(tenantId: string): Promise<{
 
 /** Kommo docs: max 7 req/s; stay under to avoid 429 and eventual IP 403. */
 const KOMMO_MAX_REQUESTS_PER_SEC = 5;
+/** Teto de espera do slot reservado (alinha com o cap de backlog no SQL). */
+const KOMMO_RATE_MAX_WAIT_MS = 30_000;
 const kommoRequestTimes = new Map<string, number[]>();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForKommoRateLimit(tenantId: string) {
+let rateLimitAdmin: ReturnType<typeof createAdminClient> | null = null;
+function rateLimitClient() {
+  if (!rateLimitAdmin) rateLimitAdmin = createAdminClient();
+  return rateLimitAdmin;
+}
+
+/**
+ * Reserva um slot no token-bucket distribuído (Postgres) e retorna quantos ms
+ * esperar antes de prosseguir, ou null se o RPC falhar (cai no fallback local).
+ */
+async function acquireKommoRateSlotMs(tenantId: string): Promise<number | null> {
+  try {
+    const { data, error } = await rateLimitClient().rpc("kommo_rate_limit_acquire", {
+      p_tenant_id: tenantId,
+      p_rate: KOMMO_MAX_REQUESTS_PER_SEC,
+      p_burst: KOMMO_MAX_REQUESTS_PER_SEC,
+    });
+    if (error) return null;
+    const ms = typeof data === "number" ? data : Number(data);
+    if (!Number.isFinite(ms)) return 0;
+    return Math.max(0, ms);
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback in-process usado só quando o limitador distribuído está indisponível. */
+async function waitForKommoRateLimitInProcess(tenantId: string) {
   const windowMs = 1000;
   for (;;) {
     const now = Date.now();
@@ -296,6 +325,18 @@ async function waitForKommoRateLimit(tenantId: string) {
     const waitMs = Math.max(20, windowMs - (now - recent[0]) + 5);
     await sleep(waitMs);
   }
+}
+
+async function waitForKommoRateLimit(tenantId: string) {
+  // Preferência: limitador distribuído (Postgres) — respeita o limite global de
+  // ~7 req/s por conta Kommo entre múltiplas instâncias/processos.
+  const waitMs = await acquireKommoRateSlotMs(tenantId);
+  if (waitMs !== null) {
+    if (waitMs > 0) await sleep(Math.min(waitMs, KOMMO_RATE_MAX_WAIT_MS));
+    return;
+  }
+  // Fallback local quando o RPC falha (melhor do que não limitar nada).
+  await waitForKommoRateLimitInProcess(tenantId);
 }
 
 /** Backoff exponencial com jitter (±30%) para 429/403 da Kommo. */
