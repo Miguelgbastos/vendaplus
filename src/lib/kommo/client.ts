@@ -316,10 +316,8 @@ export async function kommoFetch<T>(
   const maxAttempts = 4;
   let refreshedOn401 = false;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await waitForKommoRateLimit(tenantId);
-
-    const res = await fetch(url, {
+  const doFetch = () =>
+    fetch(url, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -328,12 +326,19 @@ export async function kommoFetch<T>(
       },
     });
 
-    // Token inválido: tenta uma vez repegar um token atualizado (refresh de peer).
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await waitForKommoRateLimit(tenantId);
+
+    let res = await doFetch();
+
+    // Token inválido: repega um token atualizado (refresh de peer) e refaz
+    // imediatamente com o token novo — sem consumir tentativa nem virar 429 falso.
     if (res.status === 401 && !refreshedOn401) {
       await res.text().catch(() => "");
       refreshedOn401 = true;
       ({ accessToken } = await getValidAccessToken(tenantId));
-      continue;
+      await waitForKommoRateLimit(tenantId);
+      res = await doFetch();
     }
 
     // 429/403: throttling agressivo — backoff exponencial com jitter.

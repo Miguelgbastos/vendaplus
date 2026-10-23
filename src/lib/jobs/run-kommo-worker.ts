@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processBackfillLossHistoryJob } from "@/lib/kommo/backfill-loss-history";
 import { failJob, processKommoJob } from "@/lib/kommo/process";
@@ -20,7 +21,9 @@ export async function runKommoWorker(options?: {
   leaseSeconds?: number;
 }) {
   const limit = Math.min(Math.max(options?.limit ?? 10, 1), 50);
-  const workerId = options?.workerId || `worker-${process.pid}`;
+  // Lease owner único por invocação: process.pid é reusado entre chamadas
+  // sequenciais no mesmo processo e quebraria o fencing (locked_by).
+  const workerId = options?.workerId || `worker-${process.pid}-${randomUUID()}`;
   const admin = createAdminClient();
   const { data: jobs, error } = await admin.rpc("claim_jobs", {
     p_limit: limit,

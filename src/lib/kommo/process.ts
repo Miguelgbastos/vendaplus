@@ -30,8 +30,8 @@ export async function processKommoJob(
     : [];
 
   if (!leadIds.length) {
-    await markJob(admin, job.id, "completed", undefined, workerId);
-    if (job.raw_event_id) {
+    const finalized = await markJob(admin, job.id, "completed", undefined, workerId);
+    if (finalized && job.raw_event_id) {
       await admin
         .from("raw_events")
         .update({ processed_at: new Date().toISOString() })
@@ -67,8 +67,10 @@ export async function processKommoJob(
     // noop
   }
 
-  await markJob(admin, job.id, "completed", undefined, workerId);
-  if (job.raw_event_id) {
+  const finalized = await markJob(admin, job.id, "completed", undefined, workerId);
+  // Só marca o raw_event como processado se este worker realmente finalizou o job
+  // (lease ainda era dele). Caso contrário, quem reclamou o job é o responsável.
+  if (finalized && job.raw_event_id) {
     await admin
       .from("raw_events")
       .update({ processed_at: new Date().toISOString() })
@@ -82,7 +84,7 @@ async function markJob(
   status: "completed" | "failed" | "dead",
   lastError?: string,
   workerId?: string,
-) {
+): Promise<boolean> {
   // Lease fencing: só finaliza o job se ainda for o dono do lease. Evita que um
   // worker com lease expirado sobrescreva o estado de outro que já o reclamou.
   let query = admin
@@ -97,7 +99,9 @@ async function markJob(
     })
     .eq("id", jobId);
   if (workerId) query = query.eq("locked_by", workerId);
-  await query;
+  // Retorna se alguma linha foi efetivamente atualizada (lease ainda válido).
+  const { data } = await query.select("id");
+  return Array.isArray(data) && data.length > 0;
 }
 
 export async function failJob(job: JobRow, error: unknown, workerId?: string) {
