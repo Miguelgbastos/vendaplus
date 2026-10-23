@@ -3,6 +3,9 @@ import { decryptSecret, timingSafeEqualString } from "../../crypto.ts";
 
 export const GWE_SIGNATURE_VERSION = "v1";
 export const GWE_TIMESTAMP_TOLERANCE_SECONDS = 300;
+// Tolerância menor para o futuro: aceita pequeno skew de relógio do emissor, mas
+// recusa timestamps claramente adiantados (reduz a janela de replay).
+export const GWE_FUTURE_SKEW_SECONDS = 60;
 
 export class GweSignatureError extends Error {
   readonly code: "missing" | "invalid" | "expired";
@@ -27,8 +30,12 @@ export function parseGweTimestamp(
     throw new GweSignatureError("invalid");
   }
 
-  const age = Math.abs(nowSeconds - timestamp);
-  if (age > GWE_TIMESTAMP_TOLERANCE_SECONDS) {
+  // Timestamps muito no futuro indicam relógio forjado/replay: janela estreita.
+  if (timestamp > nowSeconds + GWE_FUTURE_SKEW_SECONDS) {
+    throw new GweSignatureError("expired");
+  }
+  // Timestamps antigos além da tolerância são recusados (anti-replay).
+  if (nowSeconds - timestamp > GWE_TIMESTAMP_TOLERANCE_SECONDS) {
     throw new GweSignatureError("expired");
   }
   return timestamp;
@@ -52,7 +59,8 @@ export function verifyGweSignature(
     .update(`${timestamp}.${rawBody}`, "utf8")
     .digest("hex");
 
-  if (!timingSafeEqualString(match[1], expected)) {
+  // Normaliza o hex para minúsculo: emissores que enviam A-F não devem falhar.
+  if (!timingSafeEqualString(match[1].toLowerCase(), expected)) {
     throw new GweSignatureError("invalid");
   }
 }
