@@ -95,6 +95,9 @@ export async function processBackfillLossHistoryJob(
   let changedAt: string | null = lead.closed_at;
   let resolution: "db_milestones" | "events" | "milestones" | "unresolved" =
     "unresolved";
+  // Erros transitórios da Kommo (429/403/timeout) não devem virar marcador
+  // `unresolved` permanente: nesse caso retentamos o job.
+  let apiError: unknown = null;
 
   // Prefer local milestones first to stay under Kommo's 7 req/s limit.
   const dbFields =
@@ -114,7 +117,8 @@ export async function processBackfillLossHistoryJob(
         changedAt = fromEvents.changedAt ?? lead.closed_at;
         resolution = "events";
       }
-    } catch {
+    } catch (err) {
+      apiError = err;
       // Fall through to GET lead + milestones.
     }
   }
@@ -133,12 +137,19 @@ export async function processBackfillLossHistoryJob(
         (mappings ?? []) as FieldMapping[],
       );
       customFields = { ...customFields, ...normalized.customFields };
-    } catch {
+    } catch (err) {
+      apiError = err;
       // Keep DB custom_fields only.
     }
 
     resolved = commercialStageFromMilestones(customFields);
     if (resolved) resolution = "milestones";
+  }
+
+  // Sem estágio resolvido E com falha de API: deixa o worker retentar (backoff)
+  // em vez de gravar um marcador `unresolved` que impediria novas tentativas.
+  if (!resolved && apiError) {
+    throw apiError instanceof Error ? apiError : new Error(String(apiError));
   }
 
   const { data: lastPerda } = await admin
