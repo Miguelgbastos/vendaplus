@@ -50,13 +50,14 @@ async function statusNamesForTenant(
 
 export async function processBackfillLossHistoryJob(
   job: BackfillJob,
+  workerId?: string,
 ): Promise<{ ok: boolean; reason?: string }> {
   const admin = createAdminClient();
   const leadId = String(job.payload.lead_id ?? "");
   const kommoLeadId = String(job.payload.kommo_lead_id ?? "");
 
   if (!leadId || !/^\d+$/.test(kommoLeadId) || kommoLeadId === "0") {
-    await markJob(admin, job.id, "completed");
+    await markJob(admin, job.id, "completed", undefined, workerId);
     return { ok: true, reason: "invalid_payload" };
   }
 
@@ -82,7 +83,7 @@ export async function processBackfillLossHistoryJob(
 
   // Any prior attempt (resolved or unresolved) must not hit Kommo again.
   if (existingBackfill) {
-    await markJob(admin, job.id, "completed");
+    await markJob(admin, job.id, "completed", undefined, workerId);
     return {
       ok: true,
       reason: isCommercialPriorStage(existingBackfill.from_qualification)
@@ -183,7 +184,7 @@ export async function processBackfillLossHistoryJob(
     if (error && error.code !== "23505") {
       throw new Error(error.message);
     }
-    await markJob(admin, job.id, "completed");
+    await markJob(admin, job.id, "completed", undefined, workerId);
     return { ok: true, reason: "unresolved" };
   }
 
@@ -212,7 +213,7 @@ export async function processBackfillLossHistoryJob(
   const { error } = await admin.from("qualification_history").insert(row);
   if (error) {
     if (error.code === "23505") {
-      await markJob(admin, job.id, "completed");
+      await markJob(admin, job.id, "completed", undefined, workerId);
       return { ok: true, reason: "duplicate" };
     }
     throw new Error(error.message);
@@ -224,7 +225,7 @@ export async function processBackfillLossHistoryJob(
     // Cache tag optional in non-Next contexts.
   }
 
-  await markJob(admin, job.id, "completed");
+  await markJob(admin, job.id, "completed", undefined, workerId);
   return { ok: true, reason: resolution };
 }
 
@@ -233,8 +234,10 @@ async function markJob(
   jobId: string,
   status: "completed" | "failed",
   lastError?: string,
+  workerId?: string,
 ) {
-  await admin
+  // Lease fencing: só finaliza se ainda for o dono do lease.
+  let query = admin
     .from("jobs")
     .update({
       status,
@@ -245,4 +248,6 @@ async function markJob(
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+  if (workerId) query = query.eq("locked_by", workerId);
+  await query;
 }
