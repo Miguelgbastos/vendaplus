@@ -222,6 +222,9 @@ async function upsertNormalizedLead(
     p_previous_pipeline_id: previous?.pipeline_id ?? null,
     p_previous_status_id: previous?.status_id ?? null,
     p_previous_status_name: previous?.status_name ?? null,
+    // Perda carimba o changed_at com o closed_at real (funil/dwell/CAPI corretos);
+    // transições positivas são "live" e usam now() via coalesce no SQL.
+    p_changed_at: normalized.qualification === "perda" ? closedAt : null,
   });
 
   if (error || !leadId) {
