@@ -35,11 +35,19 @@ describe("GWE signature", () => {
     );
   });
 
-  it("accepts the five-minute boundary and rejects just outside it", () => {
+  it("aceita assinatura com hex em maiúsculas", () => {
+    const hex = createHmac("sha256", secret)
+      .update(`${timestamp}.${body}`)
+      .digest("hex")
+      .toUpperCase();
+    verifyGweSignature(body, timestamp, `v1=${hex}`, secret);
+  });
+
+  it("aceita 5 min no passado e 60s no futuro; recusa fora disso", () => {
     const now = 1_800_000_000;
     assert.equal(parseGweTimestamp(String(now - 300), now), now - 300);
-    assert.equal(parseGweTimestamp(String(now + 300), now), now + 300);
+    assert.equal(parseGweTimestamp(String(now + 60), now), now + 60);
     assert.throws(() => parseGweTimestamp(String(now - 301), now));
-    assert.throws(() => parseGweTimestamp(String(now + 301), now));
+    assert.throws(() => parseGweTimestamp(String(now + 61), now));
   });
 });
