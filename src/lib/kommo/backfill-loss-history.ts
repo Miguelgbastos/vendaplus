@@ -137,7 +137,6 @@ export async function processBackfillLossHistoryJob(
         (mappings ?? []) as FieldMapping[],
       );
       customFields = { ...customFields, ...normalized.customFields };
-      apiError = null; // GET do lead funcionou: não é falha transitória.
     } catch (err) {
       apiError = err;
       // Keep DB custom_fields only.
