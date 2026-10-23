@@ -44,17 +44,17 @@ export async function runKommoWorker(options?: {
   for (const job of claimed) {
     try {
       if (job.job_type === "process_kommo_event") {
-        await processKommoJob(job);
+        await processKommoJob(job, workerId);
       } else if (job.job_type === "send_meta_capi_event") {
-        await processMetaCapiJob(job);
+        await processMetaCapiJob(job, workerId);
       } else if (job.job_type === "backfill_kommo_loss_history") {
-        await processBackfillLossHistoryJob(job);
+        await processBackfillLossHistoryJob(job, workerId);
         // Extra spacing between backfill jobs (Kommo hard limit: 7 req/s).
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       results.push({ id: job.id, ok: true });
     } catch (err) {
-      await failJob(job, err);
+      await failJob(job, err, workerId);
       results.push({
         id: job.id,
         ok: false,
