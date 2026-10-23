@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   cycleSortState,
   sortRows,
@@ -14,12 +14,10 @@ export function useSortableTable<T>(
   accessors: Readonly<Record<string, SortAccessor<T>>>,
 ) {
   const [sort, setSort] = useState<SortState>(null);
-  const accessorsRef = useRef(accessors);
-  accessorsRef.current = accessors;
 
   const sortedRows = useMemo(
-    () => sortRows(rows, sort, accessorsRef.current),
-    [rows, sort],
+    () => sortRows(rows, sort, accessors),
+    [rows, sort, accessors],
   );
 
   function toggle(key: string) {

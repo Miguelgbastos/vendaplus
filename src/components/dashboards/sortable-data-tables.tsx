@@ -42,8 +42,8 @@ export function CampaignQualityTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.slice(0, limit).map((row) => (
-            <tr key={row.name} className="border-t">
+          {sorted.slice(0, limit).map((row, index) => (
+            <tr key={`${row.name}-${index}`} className="border-t">
               <td className="max-w-72 py-3 pr-4 font-medium">
                 <span>{row.name}</span>
                 {row.leads < 10 ? (
@@ -52,11 +52,11 @@ export function CampaignQualityTable({
                   </span>
                 ) : null}
               </td>
-              <td className="py-3 text-right">{row.leads}</td>
-              <td className="py-3 text-right">{row.mql}</td>
-              <td className="py-3 text-right">{row.sal}</td>
-              <td className="py-3 text-right">{row.sql}</td>
-              <td className="py-3 text-right">{row.oportunidade}</td>
+              <td className="py-3 text-right">{formatNumber(row.leads)}</td>
+              <td className="py-3 text-right">{formatNumber(row.mql)}</td>
+              <td className="py-3 text-right">{formatNumber(row.sal)}</td>
+              <td className="py-3 text-right">{formatNumber(row.sql)}</td>
+              <td className="py-3 text-right">{formatNumber(row.oportunidade)}</td>
               <td className="py-3 text-right font-medium text-primary">{percentLabel(row.leadToSql)}</td>
               <td className="py-3 text-right font-medium text-primary">{percentLabel(row.leadToOpportunity)}</td>
             </tr>

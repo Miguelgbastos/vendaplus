@@ -41,7 +41,10 @@ async function callRpc<T>(
 ): Promise<T> {
   const { data, error } = await supabase.rpc(fn, params);
   if (error) throw new Error(`${fn}: ${error.message}`);
-  return data as T;
+  // Todos os RPCs do dashboard retornam conjuntos (table-returning). Quando não
+  // há linhas, o PostgREST pode devolver null: normaliza para [] para que os
+  // consumidores (.map/.filter/[0]) não quebrem a página inteira.
+  return (data ?? []) as T;
 }
 
 const EMPTY_STAGE_COUNTS: DashboardStageCountsRow = {
