@@ -114,9 +114,15 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
 
   if (!outcome.skipped && !outcome.result.ok) {
     const status = outcome.result.httpStatus;
+    const reason = outcome.result.errorMessage || `meta_capi_http_${status}`;
+    // Transitórios (rede/5xx/429): throw para o worker retentar com backoff.
     if (status === 0 || status >= 500 || status === 429) {
-      throw new Error(outcome.result.errorMessage || `meta_capi_http_${status}`);
+      throw new Error(reason);
     }
+    // 4xx definitivos (400/401/403): não concluir em silêncio. Marca o job como
+    // `dead` com o erro para aparecer no replay-dead em vez de sumir.
+    await markJob(admin, job.id, "dead", reason);
+    return;
   }
 
   await markJob(admin, job.id, "completed");
@@ -125,14 +131,15 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
 async function markJob(
   admin: ReturnType<typeof createAdminClient>,
   jobId: string,
-  status: "completed",
+  status: "completed" | "dead",
+  lastError?: string,
 ) {
   const { error } = await admin
     .from("jobs")
     .update({
       status,
-      last_error: null,
-      completed_at: new Date().toISOString(),
+      last_error: lastError ?? null,
+      completed_at: status === "completed" ? new Date().toISOString() : null,
       locked_at: null,
       locked_by: null,
       updated_at: new Date().toISOString(),
