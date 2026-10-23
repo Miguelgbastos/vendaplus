@@ -20,15 +20,18 @@ type JobRow = {
   max_attempts: number;
 };
 
-export async function processKommoJob(job: JobRow): Promise<void> {
+export async function processKommoJob(
+  job: JobRow,
+  workerId?: string,
+): Promise<void> {
   const admin = createAdminClient();
   const leadIds = Array.isArray(job.payload.lead_ids)
     ? job.payload.lead_ids.map(String)
     : [];
 
   if (!leadIds.length) {
-    await markJob(admin, job.id, "completed");
-    if (job.raw_event_id) {
+    const finalized = await markJob(admin, job.id, "completed", undefined, workerId);
+    if (finalized && job.raw_event_id) {
       await admin
         .from("raw_events")
         .update({ processed_at: new Date().toISOString() })
@@ -64,8 +67,10 @@ export async function processKommoJob(job: JobRow): Promise<void> {
     // noop
   }
 
-  await markJob(admin, job.id, "completed");
-  if (job.raw_event_id) {
+  const finalized = await markJob(admin, job.id, "completed", undefined, workerId);
+  // Só marca o raw_event como processado se este worker realmente finalizou o job
+  // (lease ainda era dele). Caso contrário, quem reclamou o job é o responsável.
+  if (finalized && job.raw_event_id) {
     await admin
       .from("raw_events")
       .update({ processed_at: new Date().toISOString() })
@@ -78,8 +83,11 @@ async function markJob(
   jobId: string,
   status: "completed" | "failed" | "dead",
   lastError?: string,
-) {
-  await admin
+  workerId?: string,
+): Promise<boolean> {
+  // Lease fencing: só finaliza o job se ainda for o dono do lease. Evita que um
+  // worker com lease expirado sobrescreva o estado de outro que já o reclamou.
+  let query = admin
     .from("jobs")
     .update({
       status,
@@ -90,17 +98,28 @@ async function markJob(
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+  if (workerId) query = query.eq("locked_by", workerId);
+  // Retorna se alguma linha foi efetivamente atualizada (lease ainda válido).
+  const { data } = await query.select("id");
+  return Array.isArray(data) && data.length > 0;
 }
 
-export async function failJob(job: JobRow, error: unknown) {
+export async function failJob(job: JobRow, error: unknown, workerId?: string) {
   const admin = createAdminClient();
   const message = error instanceof Error ? error.message : String(error);
   const dead = job.attempts >= job.max_attempts;
+  // Backoff exponencial com jitter (±30%) para evitar retries sincronizados
+  // martelando a Kommo após um outage.
+  const backoffBase = Math.min(
+    60_000 * 2 ** Math.max(job.attempts - 1, 0),
+    3600_000,
+  );
+  const jitter = backoffBase * 0.3 * (Math.random() * 2 - 1);
   const availableAt = new Date(
-    Date.now() + Math.min(60_000 * 2 ** Math.max(job.attempts - 1, 0), 3600_000),
+    Date.now() + Math.max(1000, Math.round(backoffBase + jitter)),
   ).toISOString();
 
-  await admin
+  let query = admin
     .from("jobs")
     .update({
       status: dead ? "dead" : "failed",
@@ -111,6 +130,8 @@ export async function failJob(job: JobRow, error: unknown) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", job.id);
+  if (workerId) query = query.eq("locked_by", workerId);
+  await query;
 }
 
 async function upsertNormalizedLead(

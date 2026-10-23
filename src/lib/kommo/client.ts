@@ -298,19 +298,26 @@ async function waitForKommoRateLimit(tenantId: string) {
   }
 }
 
+/** Backoff exponencial com jitter (±30%) para 429/403 da Kommo. */
+function kommoBackoffMs(attempt: number): number {
+  const base = 1000 * 2 ** attempt;
+  const jitter = base * 0.3 * (Math.random() * 2 - 1);
+  return Math.max(250, Math.round(base + jitter));
+}
+
 export async function kommoFetch<T>(
   tenantId: string,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const { accessToken, subdomain } = await getValidAccessToken(tenantId);
-  const url = buildKommoApiUrl(subdomain, path);
+  const initial = await getValidAccessToken(tenantId);
+  let accessToken = initial.accessToken;
+  const url = buildKommoApiUrl(initial.subdomain, path);
   const maxAttempts = 4;
+  let refreshedOn401 = false;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await waitForKommoRateLimit(tenantId);
-
-    const res = await fetch(url, {
+  const doFetch = () =>
+    fetch(url, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -319,9 +326,28 @@ export async function kommoFetch<T>(
       },
     });
 
-    if (res.status === 429 && attempt < maxAttempts - 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await waitForKommoRateLimit(tenantId);
+
+    let res = await doFetch();
+
+    // Token inválido: repega um token atualizado (refresh de peer) e refaz
+    // imediatamente com o token novo — sem consumir tentativa nem virar 429 falso.
+    if (res.status === 401 && !refreshedOn401) {
       await res.text().catch(() => "");
-      await sleep(1000 * 2 ** attempt);
+      refreshedOn401 = true;
+      ({ accessToken } = await getValidAccessToken(tenantId));
+      await waitForKommoRateLimit(tenantId);
+      res = await doFetch();
+    }
+
+    // 429/403: throttling agressivo — backoff exponencial com jitter.
+    if (
+      (res.status === 429 || res.status === 403) &&
+      attempt < maxAttempts - 1
+    ) {
+      await res.text().catch(() => "");
+      await sleep(kommoBackoffMs(attempt));
       continue;
     }
 

@@ -26,7 +26,10 @@ const QUALIFICATIONS = new Set<QualificationStage>([
  * monta o payload CAPI (com hashes) e envia via `dispatchQualificationEvent`.
  * Falhas transitórias (HTTP 5xx / 429 / rede) resultam em throw para o retry.
  */
-export async function processMetaCapiJob(job: JobRow): Promise<void> {
+export async function processMetaCapiJob(
+  job: JobRow,
+  workerId?: string,
+): Promise<void> {
   const admin = createAdminClient();
   const leadId = typeof job.payload.lead_id === "string" ? job.payload.lead_id : null;
   const qualificationRaw =
@@ -43,7 +46,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
       : `job-${job.id}`;
 
   if (!leadId || !qualification) {
-    await markJob(admin, job.id, "completed");
+    await markJob(admin, job.id, "completed", undefined, workerId);
     return;
   }
 
@@ -58,7 +61,7 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
 
   if (leadError) throw new Error(`meta_capi_lead_lookup_failed:${leadError.message}`);
   if (!lead) {
-    await markJob(admin, job.id, "completed");
+    await markJob(admin, job.id, "completed", undefined, workerId);
     return;
   }
 
@@ -121,11 +124,11 @@ export async function processMetaCapiJob(job: JobRow): Promise<void> {
     }
     // 4xx definitivos (400/401/403): não concluir em silêncio. Marca o job como
     // `dead` com o erro para aparecer no replay-dead em vez de sumir.
-    await markJob(admin, job.id, "dead", reason);
+    await markJob(admin, job.id, "dead", reason, workerId);
     return;
   }
 
-  await markJob(admin, job.id, "completed");
+  await markJob(admin, job.id, "completed", undefined, workerId);
 }
 
 async function markJob(
@@ -133,8 +136,10 @@ async function markJob(
   jobId: string,
   status: "completed" | "dead",
   lastError?: string,
+  workerId?: string,
 ) {
-  const { error } = await admin
+  // Lease fencing: só finaliza se ainda for o dono do lease.
+  let query = admin
     .from("jobs")
     .update({
       status,
@@ -145,6 +150,8 @@ async function markJob(
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+  if (workerId) query = query.eq("locked_by", workerId);
+  const { error } = await query;
 
   if (error) {
     throw new Error(`meta_capi_job_complete_failed:${error.message}`);
