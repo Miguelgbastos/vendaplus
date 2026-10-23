@@ -25,8 +25,12 @@ export function SortableTh({
         ? ArrowDown
         : ArrowUpDown;
 
+  const label =
+    typeof children === "string" ? `Ordenar por ${children}` : "Ordenar coluna";
+
   return (
     <th
+      scope="col"
       className={cn(
         "pb-3 font-medium",
         align === "right" ? "text-right" : "text-left",
@@ -43,6 +47,7 @@ export function SortableTh({
       <button
         type="button"
         onClick={onSort}
+        aria-label={label}
         className={cn(
           "inline-flex max-w-full items-center gap-1 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           align === "right" && "ml-auto flex-row-reverse",

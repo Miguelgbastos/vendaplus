@@ -91,12 +91,18 @@ export function sortRows<T>(
   const accessor = accessors[sort.key];
   if (!accessor) return [...rows];
 
-  return [...rows].sort((left, right) =>
-    compareSortValues(
-      accessor.value(left),
-      accessor.value(right),
-      accessor.type,
-      sort.direction,
-    ),
-  );
+  // Desempate determinístico pelo índice original: mantém a ordem estável entre
+  // linhas iguais em qualquer engine e evita "pulos" ao alternar a ordenação.
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const result = compareSortValues(
+        accessor.value(left.row),
+        accessor.value(right.row),
+        accessor.type,
+        sort.direction,
+      );
+      return result !== 0 ? result : left.index - right.index;
+    })
+    .map((entry) => entry.row);
 }

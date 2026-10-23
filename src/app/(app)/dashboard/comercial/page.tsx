@@ -29,10 +29,20 @@ async function CommercialSection({
   filters: DashboardFilters;
 }) {
   const analytics = await loadCommercialAnalytics(tenantId, filters);
+  // "Vazio" só quando não há nada a mostrar. A inteligência de perdas usa eventos
+  // de histórico (changed_at no período) e leads parados que não dependem de
+  // first_seen/closed_at — considerá-los evita esconder o dashboard indevidamente.
+  const lossTotal = analytics.lossPreviousStage.reduce(
+    (sum, stage) => sum + stage.value,
+    0,
+  );
   const empty =
     analytics.filteredLeads === 0 &&
     analytics.summary.vendaFechada === 0 &&
-    analytics.summary.perdaFechada === 0;
+    analytics.summary.perdaFechada === 0 &&
+    lossTotal === 0 &&
+    analytics.lossReasons.length === 0 &&
+    analytics.stagnantOpen.length === 0;
   return (
     <CommercialAnalyticsDashboard
       data={analytics}
